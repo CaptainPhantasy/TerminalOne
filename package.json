@@ -1,0 +1,26 @@
+{
+  "name": "terminalone",
+  "version": "1.0.0",
+  "description": "Generic WebSocket terminal emulator",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "test": "node tests/smoke-test.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "ws": "^8.14.2",
+    "node-pty": "^0.10.1",
+    "uuid": "^9.0.0",
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-web-links": "^0.12.0"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.41.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

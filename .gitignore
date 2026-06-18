@@ -1,0 +1,9 @@
+.env
+node_modules/
+.DS_Store
+.work/
+
+# Harness control-plane — never ship (infra topology, governance state)
+.floyd/
+.supercache/
+FLOYD.md
