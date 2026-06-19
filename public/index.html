@@ -313,7 +313,8 @@
  <script type="module">
   import { Terminal } from '/node_modules/@xterm/xterm/lib/xterm.mjs';
   import { FitAddon } from '/node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
-  import { WebLinksAddon } from '/node_modules/@xterm/addon-web-links/lib/addon-web-links.mjs';
+ import { WebLinksAddon } from '/node_modules/@xterm/addon-web-links/lib/addon-web-links.mjs';
+ import { InputGuard } from './input-guard.mjs';
 
   // ── Theme catalog ─────────────────────────────────────────────────────────
   const THEMES = {
@@ -579,6 +580,7 @@
   const SEQ = {
    esc: '\x1b',
    tab: '\t',
+   enter: '\r',
    del: '\x7f',
    up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D',
    home: '\x1b[H', end: '\x1b[F', pgup: '\x1b[5~', pgdn: '\x1b[6~'
@@ -678,6 +680,7 @@
     iphone.appendChild(makeGroup([
      makeKey('ESC', { seq: SEQ.esc, title: 'Escape' }),
      makeKey('TAB', { seq: SEQ.tab, title: 'Tab' }),
+     makeKey('ENTER', { seq: SEQ.enter, title: 'Enter' }),
      makeKey('CTRL', { kind: 'toggle', mod: 'ctrl', title: 'Ctrl (sticky)' })
     ]));
     iphone.appendChild(makeGroup([
@@ -700,6 +703,7 @@
     ipad.appendChild(makeGroup([
      makeKey('ESC', { seq: SEQ.esc, title: 'Escape' }),
      makeKey('TAB', { seq: SEQ.tab, title: 'Tab' }),
+     makeKey('ENTER', { seq: SEQ.enter, title: 'Enter' }),
      makeKey('CTRL', { kind: 'toggle', mod: 'ctrl', title: 'Ctrl (sticky)' }),
      makeKey('ALT', { kind: 'toggle', mod: 'alt', title: 'Alt / Meta (sticky)' })
     ]));
@@ -827,19 +831,10 @@
 
    initTouchScroll();
 
-  // ── iOS dictation guard ───────────────────────────────────────────────
-  // iOS dictate-to-text streams CUMULATIVE partial results through onData
-  // ("this" -> "this is" -> "this is a"), and naively forwarding each fires
-  // resends the whole prefix, producing the visible triplication. We hold
-  // each payload briefly, and on flush send only the NEW suffix beyond what
-  // we've already committed to the shell. Normal typing is unaffected: a
-  // single keystroke fires once, the debounce is imperceptible, and the
-  // delta is just the character itself. Non-prefix data (Enter, arrows,
-  // paste, deletion) flushes immediately and resets the tracker.
-  let pendingData = '';
-  let lastSent = '';
-  let dictTimer = null;
-  const DICT_QUIET_MS = 250;
+ // ── iOS dictation / typing guard ────────────────────────────────────────
+ // Replaced buggy inline debounce (which overwrote fast keystrokes) with
+ // InputGuard: single chars send immediately, duplicated onData events are
+ // dropped, and iOS/IME cumulative partials send only the new suffix.
 
   function sendInput(data) {
    if (ws && ws.readyState === WebSocket.OPEN) {
@@ -847,43 +842,11 @@
    }
   }
   // Expose the sender to the on-screen key bar (outside this closure).
-  sendInputFn = sendInput;
+ sendInputFn = (data) => guard.send(data);
 
-  function flushPending() {
-   dictTimer = null;
-   if (!pendingData) return;
-   // Send only the new suffix the shell hasn't seen yet.
-   let delta = pendingData;
-   if (lastSent && pendingData.startsWith(lastSent)) {
-    delta = pendingData.slice(lastSent.length);
-   }
-   sendInput(delta);
-   lastSent = pendingData;
-   pendingData = '';
-  }
+ const guard = new InputGuard({ send: sendInput, identicalDedupeMs: 500 });
 
-  term.onData((data) => {
-   // Control sequences, Enter, paste, or anything that isn't a clean prefix
-   // extension: commit immediately and reset the composition tracker so the
-   // next dictated phrase starts fresh.
-   const isLiteral = data.length > 0 && [...data].every(c => c.charCodeAt(0) >= 0x20);
-   const isPrefixExt = isLiteral && (lastSent === '' || data.startsWith(lastSent));
-
-   if (!isLiteral || !isPrefixExt) {
-    if (dictTimer) { clearTimeout(dictTimer); dictTimer = null; }
-    // If we were holding a pending partial, commit its delta first so the
-    // literal/control input lands after it, not instead of it.
-    flushPending();
-    sendInput(data);
-    lastSent = '';
-    pendingData = '';
-    return;
-   }
-
-   pendingData = data;
-   if (dictTimer) clearTimeout(dictTimer);
-   dictTimer = setTimeout(flushPending, DICT_QUIET_MS);
-  });
+  term.onData((data) => guard.onData(data));
 
    term.onResize(({ cols, rows }) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
