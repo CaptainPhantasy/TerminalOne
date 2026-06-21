@@ -64,14 +64,14 @@ export function init(T1) {
   btn.addEventListener('click', unlock);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') unlock(); });
 
-  function tryWebAuthn() {
-    if (typeof PublicKeyCredential === 'undefined') return Promise.resolve(false);
-    return PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then((available) => {
-      if (!available) return false;
-      // No credential creation in this feature — PIN fallback is used.
-      return false;
-    }).catch(() => false);
-  }
+  // NOTE: WebAuthn credential creation/verification is intentionally not
+  // wired here — it requires a secure context (HTTPS or localhost) plus a
+  // registered credential, neither of which a generic browser terminal can
+  // assume. This feature degrades to a local PIN. The PIN is stored in
+  // same-origin localStorage (cleartext) — acceptable threat model for a
+  // single-user local terminal; do NOT reuse this pattern for multi-user or
+  // remote-deployed apps.
+  function tryWebAuthn() { return Promise.resolve(false); }
 
   // Auto-lock if previously locked.
   if (T1.storage.get(LS_LOCKED, '0') === '1') lock();
@@ -79,8 +79,13 @@ export function init(T1) {
   // Toolbar button.
   const lockBtn = T1.ui.makeButton('Lock', 'Lock this session', () => {
     if (!getPin()) {
-      const pin = prompt('Create a 4-8 digit PIN');
+      let pin = prompt('Create a 4-8 digit PIN');
       if (!pin) return;
+      pin = pin.trim();
+      if (!/^\d{4,8}$/.test(pin)) {
+        T1.toast('PIN must be 4-8 digits', 'warn');
+        return;
+      }
       setPin(pin);
     }
     lock();

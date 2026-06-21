@@ -57,12 +57,18 @@ export function init(T1) {
           });
           T1.sendData(dataUrl);
           T1.toast(`Pasted image ${file.name}`);
-        } catch (err) {
-          T1.sendData(file.path || file.name);
+        } catch (_) {
+          // Browsers do not expose real filesystem paths to web pages for
+          // security; fall back to the filename only.
+          T1.sendData(file.name);
+          T1.toast(`Pasted ${file.name}`, 'warn');
         }
       } else {
-        T1.sendData(file.path || `/path/to/${file.name}`);
-        T1.toast(`Pasted path ${file.name}`);
+        // Browsers do not expose real filesystem paths to web pages; only the
+        // filename is available. Sending a fabricated path would mislead the
+        // shell, so we send the bare filename instead.
+        T1.sendData(file.name);
+        T1.toast(`Pasted ${file.name}`);
       }
     }
   });

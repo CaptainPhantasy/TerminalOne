@@ -14,9 +14,9 @@ export function init(T1) {
   }
 
   function beat() {
-    const ws = window.__terminalOne?.ws;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    try { ws.send(JSON.stringify({ type: 'ping', ts: Date.now() })); } catch (_) {}
+    const sock = T1.ws;
+    if (!sock || sock.readyState !== WebSocket.OPEN) return;
+    try { sock.send(JSON.stringify({ type: 'ping', ts: Date.now() })); } catch (_) {}
   }
 
   function onVisibility() {
