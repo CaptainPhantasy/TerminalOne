@@ -63,6 +63,16 @@ function clampDims(cols, rows) {
   };
 }
 
+/** Count sessions running a live shell, optionally excluding one id. */
+function countRealShells(excludeId) {
+  let n = 0;
+  for (const s of activeSessions.values()) {
+    if (s.id === excludeId) continue;
+    if (s.ptyProcess && !s.processExited) n += 1;
+  }
+  return n;
+}
+
 /** @param {import('ws').WebSocket} ws @param {string} code @param {string} message @param {string|null} id */
 function wsError(ws, code, message, id) {
   if (ws.readyState === WebSocket.OPEN) {
@@ -213,10 +223,9 @@ function wirePtyToSession(ptyProcess, session) {
 /**
  * Spawn the user's default shell into the session and wire it up.
  * @param {Session} session
- * @param {import('ws').WebSocket} [ws]
  * @param {string} [cwd]
  */
-function spawnShell(session, ws, cwd) {
+function spawnShell(session, cwd) {
   const { id } = session;
   const cols = session.lastCols || 120;
   const rows = session.lastRows || 40;
@@ -319,9 +328,17 @@ function handleMessage(session, ws, data) {
       if (session.ptyProcess && !session.processExited) {
         try { session.ptyProcess.kill(); } catch (_) {}
       }
-      session.lastCols = clampDims(data.cols, data.cols).cols;
-      session.lastRows = clampDims(data.rows, data.rows).rows;
-      spawnShell(session, ws, data.cwd || process.env.HOME || os.homedir());
+      const { cols, rows } = clampDims(data.cols, data.rows);
+      session.lastCols = cols;
+      session.lastRows = rows;
+      // Enforce the concurrent-shell cap. Fresh spawns only — resume reuses an
+      // existing session and is exempt. The current (placeholder) session has no
+      // PTY yet and is excluded from the count.
+      if (countRealShells(session.id) >= MAX_CONCURRENT_SESSIONS) {
+        wsError(ws, 'SESSION_LIMIT', 'Maximum concurrent sessions reached', session.id);
+        break;
+      }
+      spawnShell(session, data.cwd || process.env.HOME || os.homedir());
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ready', sessionId: session.id, command: process.env.SHELL || '/bin/zsh', cwd: session.shellCwd }));
       }
@@ -342,7 +359,7 @@ function handleMessage(session, ws, data) {
       break;
     }
     case 'input': {
-      if (session.ptyProcess && !session.processExited) {
+      if (session.ptyProcess && !session.processExited && typeof data.data === 'string') {
         try { session.ptyProcess.write(data.data); }
         catch (e) { wsError(ws, 'WRITE_FAILED', `Write failed: ${e.message}`, session.id); }
       }
@@ -362,6 +379,12 @@ function handleMessage(session, ws, data) {
       // Explicit user-initiated close → full teardown of this session.
       session.userClosed = true;
       if (session.ptyProcess && !session.processExited) cleanupSession(session);
+      break;
+    }
+    case 'ping': {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'pong', ts: data.ts }));
+      }
       break;
     }
     case 'pong': {
@@ -385,7 +408,7 @@ function handleMessage(session, ws, data) {
 function bindWsToSession(ws, session) {
   ws.__sessionRef = session;
 
-  const remoteAddr = ws.socket?.remoteAddress || null;
+  const remoteAddr = ws._socket?.remoteAddress || null;
   info(session.id, 'WebSocket connected', { ip: remoteAddr });
 
   ws.on('message', (message) => {
@@ -443,7 +466,12 @@ function bindWsToSession(ws, session) {
 // ─── Express app ────────────────────────────────────────────────────────────
 
 const app = express();
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// App assets are served with no-store so the browser always runs the latest
+// frontend (critical during input/dictation iteration — a cached input-guard.mjs
+// silently reproduces already-fixed echo bugs).
+app.use(express.static(path.join(__dirname, '..', 'public'), {
+  setHeaders: (res) => res.setHeader('Cache-Control', 'no-store'),
+}));
 app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules')));
 
 app.get('/health', (req, res) => { res.json({ status: 'ok', sessions: activeSessions.size }); });

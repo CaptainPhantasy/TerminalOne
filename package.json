@@ -6,16 +6,21 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "node tests/smoke-test.js"
+    "test": "node tests/input-guard.test.mjs && node tests/smoke-test.js && node tests/feature-test.js && node tests/responsive-test.js",
+    "test:unit": "node tests/input-guard.test.mjs",
+    "test:smoke": "node tests/smoke-test.js",
+    "test:features": "node tests/feature-test.js",
+    "test:responsive": "node tests/responsive-test.js"
   },
   "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-search": "^0.16.0",
+    "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/xterm": "^6.0.0",
     "express": "^4.18.2",
-    "ws": "^8.14.2",
     "node-pty": "^0.10.1",
     "uuid": "^9.0.0",
-    "@xterm/xterm": "^6.0.0",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/addon-web-links": "^0.12.0"
+    "ws": "^8.14.2"
   },
   "devDependencies": {
     "puppeteer": "^24.41.0"

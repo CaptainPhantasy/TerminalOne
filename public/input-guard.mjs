@@ -1,22 +1,34 @@
 /**
- * InputGuard — eliminate iOS dictate-to-text and IME echo duplication while
- * keeping normal typing perfectly crisp.
+ * InputGuard — eliminate iOS/iPadOS dictate-to-text and IME echo duplication
+ * while keeping normal typing perfectly crisp.
  *
- * Design:
- *  - Single characters are sent immediately (no debounce, no dedupe).
- *  - Multi-character strings are deduplicated against the last identical event
- *    and against the last-sent baseline for a generous window (500ms). This
- *    catches iOS dictation re-firing the same phrase as the recognizer settles.
- *  - Multi-character strings suppress any overlap with the last-sent string so
- *    cumulative partials ("a" → "ab" → "abc") append only the new tail.
- *  - Control sequences reset the overlap baseline and are sent immediately.
+ * v2 design (rolling buffer):
+ *  - Single characters are sent immediately and APPEND to a rolling buffer of
+ *    recently-sent text. (v1 reset the baseline on single chars — this was the
+ *    dictation-doubling bug: a single-char event between the last partial and
+ *    the compositionend finalization zeroed the baseline, so the full phrase
+ *    was re-sent in its entirety.)
+ *  - Multi-character strings are compared against the FULL rolling buffer, not
+ *    just the last event. This catches all dictation patterns:
+ *      • Cumulative partials ("a" → "ab" → "abc") — suffix delta sent.
+ *      • Finalization re-fire of the complete phrase — suppressed (already in
+ *        buffer).
+ *      • Word-by-word partials followed by full-phrase finalization — the
+ *        accumulated buffer contains the full phrase, so finalization is
+ *        suppressed.
+ *  - Control sequences reset the buffer and are sent immediately.
+ *  - The rolling buffer is capped (default 256 chars) and entries expire after
+ *    `bufferDedupeMs` (default 3000ms) so legitimate paste/type of previously
+ *    sent text is not suppressed after a few seconds.
  */
 export class InputGuard {
-  constructor({ send, identicalDedupeMs = 500 }) {
+  constructor({ send, identicalDedupeMs = 500, bufferSize = 256, bufferDedupeMs = 3000 }) {
     this._send = send;
     this.identicalDedupeMs = identicalDedupeMs;
-    this._lastSent = '';
-    this._lastSentTime = 0;
+    this._bufferSize = bufferSize;
+    this._bufferDedupeMs = bufferDedupeMs;
+    this._sentBuffer = '';
+    this._bufferTime = 0;
     this._lastEvent = { data: '', time: 0 };
     this._now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
   }
@@ -26,66 +38,101 @@ export class InputGuard {
 
     const now = this._now();
 
-    // Drop duplicate events that xterm.js / iOS sometimes fires twice for one
-    // physical input. Never deduplicate single characters (normal typing).
+    // Drop exact duplicate events that xterm.js / iOS sometimes fires twice
+    // for one physical input. Never deduplicates single characters (normal
+    // typing must stay crisp).
     if (data.length > 1 && data === this._lastEvent.data && now - this._lastEvent.time < this.identicalDedupeMs) {
       return;
     }
     this._lastEvent = { data, time: now };
 
     const printable = [...data].every((c) => c.charCodeAt(0) >= 0x20);
+
+    // Non-printable (control sequences, Enter, arrows, etc.) → send + reset.
     if (!printable) {
       this._sendRaw(data);
-      this._resetBaseline();
+      this._resetBuffer();
       return;
     }
 
+    // Single character → always send immediately, APPEND to buffer (do NOT
+    // reset — this is the v1 bug fix).
     if (data.length === 1) {
       this._sendRaw(data);
-      this._resetBaseline();
+      this._appendBuffer(data);
       return;
     }
 
-    // If we just sent this exact multi-char string, don't send it again.
-    if (data === this._lastSent && now - this._lastSentTime < this.identicalDedupeMs) {
+    // Multi-char: compare against the full rolling buffer so that dictation
+    // finalization (compositionend re-firing the complete phrase) is suppressed
+    // even when single chars or word-level partials were sent in between.
+
+    const bufferFresh = this._sentBuffer && now - this._bufferTime < this._bufferDedupeMs;
+
+    // Case 1: data is entirely contained in recent buffer → already sent.
+    if (bufferFresh && this._sentBuffer.includes(data)) {
       return;
     }
 
-    const delta = this._deltaFromLast(data);
-    this._sendRaw(delta);
-    this._lastSent = data;
-    this._lastSentTime = now;
+    // Case 2: buffer is a prefix of data → send only the suffix (cumulative
+    // partial extension: "hello" → "hello world").
+    if (bufferFresh && data.startsWith(this._sentBuffer)) {
+      const delta = data.slice(this._sentBuffer.length);
+      this._sendRaw(delta);
+      this._sentBuffer = data.slice(-this._bufferSize);
+      this._bufferTime = now;
+      return;
+    }
+
+    // Case 3: data overlaps the tail of the buffer → send only the new suffix
+    // (suffix revision: "hello world" → "world peace").
+    if (bufferFresh) {
+      const overlap = this._longestTailOverlap(this._sentBuffer, data);
+      if (overlap > 0) {
+        const delta = data.slice(overlap);
+        if (delta.length === 0) return; // fully overlapped → already sent
+        this._sendRaw(delta);
+        this._appendBuffer(delta);
+        this._bufferTime = now;
+        return;
+      }
+    }
+
+    // Case 4: No overlap with recent history → send full data.
+    this._sendRaw(data);
+    this._appendBuffer(data);
+    this._bufferTime = now;
   }
 
-  /** Raw send for deliberate key-bar input. */
+  /** Raw send for deliberate key-bar input (Enter, arrows, etc.). Resets the
+   *  buffer so the next dictation starts clean. */
   send(data) {
     this._sendRaw(data);
-    this._resetBaseline();
+    this._resetBuffer();
   }
 
   dispose() {
     /* no timers to clear */
   }
 
-  _resetBaseline() {
-    this._lastSent = '';
-    this._lastSentTime = 0;
+  _appendBuffer(text) {
+    this._sentBuffer = (this._sentBuffer + text).slice(-this._bufferSize);
   }
 
-  _deltaFromLast(data) {
-    if (!this._lastSent) return data;
+  _resetBuffer() {
+    this._sentBuffer = '';
+    this._bufferTime = 0;
+  }
 
-    // Prefix extension: recognizer grew the phrase at the end.
-    if (data.startsWith(this._lastSent)) return data.slice(this._lastSent.length);
-
-    // Suffix overlap: recognizer revised a few characters at the start.
-    const max = Math.min(this._lastSent.length, data.length);
-    for (let len = max; len > 0; len--) {
-      if (this._lastSent.endsWith(data.slice(0, len))) {
-        return data.slice(len);
+  /** Longest suffix of `buffer` that is also a prefix of `data`. */
+  _longestTailOverlap(buffer, data) {
+    const max = Math.min(buffer.length, data.length);
+    for (let len = max; len > 0; len -= 1) {
+      if (buffer.endsWith(data.slice(0, len))) {
+        return len;
       }
     }
-    return data;
+    return 0;
   }
 
   _sendRaw(data) {

@@ -136,6 +136,61 @@ async function run() {
     g.dispose();
   });
 
+  // ── Regression: dictation doubling ──────────────────────────────────────
+  // v1 bug: a single-char event (space, first char, IME marker) between the
+  // last multi-char partial and the compositionend finalization called
+  // _resetBaseline(), zeroing _lastSent. The full phrase then arrived with no
+  // baseline to diff against → sent in full → DOUBLED. v2 appends single chars
+  // to a rolling buffer instead, so the finalization is recognized as
+  // already-sent and suppressed.
+
+  await test('dictation: single char between partial and final does NOT double', async () => {
+    const { g, sent } = makeGuard();
+    // Partials stream in cumulatively.
+    g.onData('hello');
+    await sleep(10);
+    g.onData('hello world');
+    await sleep(10);
+    // iOS fires a single char (space / first char of finalization) — this was
+    // the bug trigger in v1.
+    g.onData(' ');
+    await sleep(10);
+    // compositionend re-fires the full phrase.
+    g.onData('hello world');
+    const joined = sent.join('');
+    assert.strictEqual(joined, 'hello world ', 'dictation finalization was doubled');
+    assert.ok(!joined.includes('hello worldhello'), 'full phrase re-sent after single char');
+    g.dispose();
+  });
+
+  await test('dictation: compositionend full phrase suppressed after word partials', async () => {
+    const { g, sent } = makeGuard();
+    // Word-by-word partials (non-cumulative, space-delimited).
+    g.onData('hello ');
+    await sleep(10);
+    g.onData('hello world');
+    await sleep(10);
+    // Finalization re-fires the complete phrase.
+    g.onData('hello world');
+    const joined = sent.join('');
+    assert.strictEqual(joined, 'hello world', 'finalization doubled after cumulative partials');
+    g.dispose();
+  });
+
+  await test('single char between dictation partials does not break suffix logic', async () => {
+    const { g, sent } = makeGuard();
+    g.onData('foo');
+    await sleep(10);
+    g.onData('b');            // single char — appends to buffer, no reset
+    await sleep(10);
+    g.onData('ar');           // next partial
+    await sleep(10);
+    g.onData('foobar');       // finalization
+    const joined = sent.join('');
+    assert.strictEqual(joined, 'foobar', 'interleaved single char broke delta');
+    g.dispose();
+  });
+
   console.log('\nAll input-guard tests passed!');
 }
 

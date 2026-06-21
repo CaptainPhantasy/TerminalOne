@@ -254,6 +254,28 @@
   }
   .settings-row select:focus { outline: none; border-color: var(--ui-accent); }
   .settings-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+ .t1toolbar {
+   display: flex;
+   flex-wrap: wrap;
+   gap: 6px;
+   padding: 6px 16px;
+   background: var(--ui-elevated);
+   border-bottom: 1px solid var(--ui-border);
+   flex: 0 0 auto;
+ }
+ .t1toolbar:empty { display: none; }
+ .t1button {
+   background: var(--ui-bg);
+   border: 1px solid var(--ui-border);
+   color: var(--ui-fg);
+   border-radius: 6px;
+   padding: 4px 10px;
+   font-size: 12px;
+   cursor: pointer;
+ }
+ .t1button:hover { border-color: var(--ui-accent); }
+ .t1button:active { transform: scale(0.97); }
+ .t1button.active { background: var(--ui-accent); color: #000; border-color: var(--ui-accent); }
  </style>
 </head>
 <body data-style="default" data-theme="tokyo-night" data-device="desktop">
@@ -274,6 +296,8 @@
    </div>
   </header>
 
+  <!-- Feature toolbar — buttons appended by public/features/*.mjs modules. -->
+  <div class="t1toolbar" id="t1toolbar" role="toolbar" aria-label="Features"></div>
   <main class="terminal-container">
    <div id="terminal"></div>
   </main>
@@ -1043,6 +1067,84 @@
   window.addEventListener('orientationchange', () => {
    setTimeout(() => { buildKeyBars(); scheduleFit(); }, 200);
   });
+
+  // ── Feature module loader ────────────────────────────────────────────────
+  // public/features/*.mjs each export init(T1). This builds the T1 facade the
+  // feature API contract expects, then dynamically imports every module and
+  // runs its init() inside try/catch so one failure cannot break the app.
+  const termReadyCbs = [];
+  function onTermReady(cb) {
+    termReadyCbs.push(cb);
+    if (term) { try { cb(term); } catch (_) {} }
+  }
+  // Re-fire onTermReady callbacks whenever the terminal is recreated on
+  // reconnect. initTerminal() already ran before this loader exists, so fire
+  // for the current term now.
+  function __fireTermReady() { if (term) termReadyCbs.forEach((cb) => { try { cb(term); } catch (_) {} }); }
+  const __origInitTerminal = initTerminal;
+  initTerminal = function () { __origInitTerminal(); __fireTermReady(); };
+  __fireTermReady();
+
+  const T1 = {
+    get term() { return term; },
+    get ws() { return ws; },
+    sendData: (data) => { if (sendInputFn) sendInputFn(data); },
+    fit: () => scheduleFit(),
+    toast: (msg, type = 'info') => {
+      // Toast reuses the status bar; warn/error briefly color the status.
+      try { updateStatus(String(msg).slice(0, 60), type === 'error' ? 'error' : type === 'warn' ? 'neutral' : 'connected'); } catch (_) {}
+    },
+    onTermReady,
+    storage: {
+      get: (k, def) => { const v = lsGet(k, undefined); return v === undefined ? def : v; },
+      set: (k, v) => lsSet(k, String(v)),
+      del: (k) => lsDel(k)
+    },
+    ui: {
+      toolbar: () => document.getElementById('t1toolbar'),
+      appShell: () => document.querySelector('.app-shell'),
+      settingsPanel: () => document.querySelector('#settingsModal .settings-panel'),
+      addStyle: (css) => {
+        const s = document.createElement('style');
+        s.textContent = css;
+        document.head.appendChild(s);
+      },
+      makeButton: (label, title, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 't1button';
+        b.textContent = label;
+        if (title) b.title = title;
+        if (typeof onClick === 'function') b.addEventListener('click', onClick);
+        return b;
+      }
+    }
+  };
+
+  // Ordered by the ShellFish parity manifest, then the extra verticals.
+  const FEATURE_MODULES = [
+    'theme-system', 'keyboard-shortcuts', 'history-undo', 'autosave',
+    'recent-commands', 'search', 'command-palette', 'toast-status',
+    'osc-bridge', 'links', 'zoom', 'keybar-config', 'session-manager',
+    'status-metrics', 'export', 'clipboard', 'snippets', 'fontsize',
+    'wake-fullscreen', 'desktop-palette', 'file-drop', 'floating-palette',
+    'haptic-keys', 'keepalive', 'multi-window-sync', 'phone-landscape-focus',
+    'session-lock', 'settings-sync', 'shortcut-help', 'smart-completions',
+    'smart-suggest', 'split-view', 'stylus-support', 'swipe-history',
+    'swipe-sessions', 'tab-reorder', 'two-finger-menu', 'window-title'
+  ];
+  (async () => {
+    const loaded = [];
+    for (const name of FEATURE_MODULES) {
+      try {
+        const mod = await import(`./features/${name}.mjs`);
+        if (typeof mod.init === 'function') { mod.init(T1); loaded.push(name); }
+      } catch (err) {
+        console.error(`[features] ${name} failed to load:`, err);
+      }
+    }
+    window.__t1Features = loaded;
+  })();
 
   connect();
 
