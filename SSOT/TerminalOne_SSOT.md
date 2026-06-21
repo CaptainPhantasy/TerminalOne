@@ -75,6 +75,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 |---|---|---|---|
 | 2026-06-17T14:20:00-04:00 | Port 11001 claimed for TerminalOne | Adjacent to harness-launcher (11000) for lineage; avoids forbidden ports 3000/5173 and existing claims. | Agent |
 | 2026-06-17T14:20:00-04:00 | Clone only terminal part of harness-launcher | User instruction: clone terminal part, not harnesses or launcher. | Douglas |
+| 2026-06-19T00:00:00-04:00 | Responsive layout: dvh/dvw + safe-area on .app-shell | iPad/tablet viewport overflow caused by double-counted safe-area insets (body padding + 100vh). Fixed by moving insets to the element that owns height. | Douglas/Agent |
 <!-- Decisions are append-only. When a decision is superseded, add a new row with the -->
 <!-- superseding decision and link back to the old one. Never edit historical rows. -->
 
@@ -104,7 +105,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 
 | Pattern | Trigger | Fix | Confidence |
 |---|---|---|---|
-| <!-- e.g., build-restart --> | <!-- e.g., After running build --> | <!-- e.g., pkill + restart --> | <!-- 0.0-1.0 --> |
+| viewport-safe-area-double-count | App overflows/clips bottom controls on mobile | Don't put env(safe-area-inset-*) on body AND 100vh on a child. With viewport-fit=cover the body already spans the notch zones; apply insets on the element that owns height (border-box), and use 100dvh/dvw with vh/vw fallback. | 1.0 |
 
 ---
 
@@ -114,6 +115,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 |---|---|---|---|
 | 2026-06-17T14:20:00-04:00 | Current State / Architecture Facts | Project is now a Node.js CommonJS terminal emulator using Express+ws+node-pty+xterm.js on port 11001 | `/Volumes/SanDisk1Tb/TerminalOne/FLOYD.md`, `/Volumes/SanDisk1Tb/SSOT/port-registry.json` | 100% |
 | 2026-06-17T14:20:00-04:00 | Key Decisions | Port 11001 claimed and terminal part cloned without harness/launcher code | `/Volumes/SanDisk1Tb/SSOT/port-registry.json`, agent edits | 100% |
+| 2026-06-19T00:00:00-04:00 | Architecture Facts / Responsive layout | App shell no longer overflows the viewport on any iPad size; uses dvh/dvw (vh/vw fallback) with safe-area insets on .app-shell (border-box). Verified across 10 tablet viewports incl. iPad A16 11th-gen (820×1180) portrait/landscape/Split View via tests/responsive-test.js (puppeteer): scrollH/W ≤ vh/vw, key bar + footer within viewport, terminal contained. | tests/responsive-test.js (npm test), public/index.html:23-63,146-152 | 100% |
 
 ---
 
@@ -121,6 +123,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 
 - 2026-06-17T14:07:01-04:00 — Initialized SSOT.
 - 2026-06-17T14:20:00-04:00 — Cloned terminal part from harness-launcher; claimed port 11001; updated FLOYD.md and SSOT architecture facts.
+- 2026-06-19T00:00:00-04:00 — Fixed iPad/tablet viewport overflow (app exceeded viewport). Root cause: double-counted safe-area insets (body padding + 100vh on .app-shell under viewport-fit=cover). Moved insets onto .app-shell (border-box), switched to 100dvh/dvw with vh/vw fallback, removed redundant keybar bottom inset, hardened #terminal overflow, added tablet/Split-View/landscape-with-keyboard media queries. Added tests/responsive-test.js (10 viewports incl. iPad A16 11th-gen); wired into npm test. Full suite green.
 
 <!-- Append new entries BELOW this comment line, in chronological order. -->
 <!-- Never edit or remove existing entries — this is the authoritative change history. -->
