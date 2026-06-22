@@ -15,6 +15,7 @@
  *   - iPad Pro 12.9"   1024×1366
  *   - Split View (narrow iPad column) 320×1024, 507×1024, 520×1024
  *   - Landscape        1133×744, 1180×820, 1366×1024
+ *   - iPhone SE / 15 / 15 Pro Max (portrait + landscape) — chrome toggle + control bar
  */
 
 const path = require('path');
@@ -41,6 +42,18 @@ const VIEWPORTS = [
 // iPadOS 13+ UA — reports MacIntel but requests desktop; combined with touch
 // this is what detectDevice() keys off of for the iPad key bar.
 const IPAD_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+
+// Real iPhone Safari UA — detectDevice() keys off /iPhone/ for the iphone key bar.
+const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+const IPHONE_VIEWPORTS = [
+  { name: 'iPhone SE (portrait)',          width: 375, height: 667, dpr: 2 },
+  { name: 'iPhone SE (landscape)',         width: 667, height: 375, dpr: 2 },
+  { name: 'iPhone 15 (portrait)',          width: 393, height: 852, dpr: 3 },
+  { name: 'iPhone 15 (landscape)',         width: 852, height: 393, dpr: 3 },
+  { name: 'iPhone 15 Pro Max (portrait)',  width: 430, height: 932, dpr: 3 },
+  { name: 'iPhone 15 Pro Max (landscape)', width: 932, height: 430, dpr: 3 }
+];
 
 function assert(cond, msg) {
   if (!cond) throw new Error('ASSERT FAILED: ' + msg);
@@ -143,6 +156,77 @@ async function checkViewport(browser, vp) {
 
     // Terminal element itself must be fully contained (xterm canvas not clipped).
     assert(m.term.bottom <= m.vh + 1 && m.term.right <= m.vw + 1, `${vp.name}: xterm element contained (term bottom=${Math.round(m.term.bottom)}, right=${Math.round(m.term.right)})`);
+
+    // R1/R3: the chrome toggle must be on-screen and a >=44pt target on iPad too.
+    await pg.waitForFunction(() => !!document.querySelector('.t1-chrome-fab'), { timeout: 8000 });
+    const fabM = await pg.evaluate(() => {
+      const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height, display: getComputedStyle(el).display }; };
+      return { fab: r(document.querySelector('.t1-chrome-fab')), key: r(document.querySelector('#keybarIpad .kb-key') || document.querySelector('.kb-key')), vw: window.innerWidth, vh: window.innerHeight };
+    });
+    assert(fabM.fab && fabM.fab.display !== 'none', `${vp.name}: chrome toggle present`);
+    assert(fabM.fab.left >= -1 && fabM.fab.right <= fabM.vw + 1, `${vp.name}: chrome toggle within viewport X (left=${Math.round(fabM.fab.left)}, right=${Math.round(fabM.fab.right)}, vw=${fabM.vw})`);
+    assert(fabM.fab.top >= -1 && fabM.fab.bottom <= fabM.vh + 1, `${vp.name}: chrome toggle within viewport Y (top=${Math.round(fabM.fab.top)}, bottom=${Math.round(fabM.fab.bottom)})`);
+    assert(fabM.fab.width >= 44 && fabM.fab.height >= 44, `${vp.name}: chrome toggle >=44pt (${Math.round(fabM.fab.width)}x${Math.round(fabM.fab.height)})`);
+    assert(fabM.key && fabM.key.height >= 44, `${vp.name}: keybar key >=44pt tall (${Math.round(fabM.key.height)})`);
+  } finally {
+    await pg.close();
+  }
+}
+
+// Per-iPhone-viewport: emulate an iPhone, load the app, and prove the chrome
+// toggle is reachable on-screen and the control bar (keybar) stays visible —
+// including when the chrome is collapsed for more terminal space.
+async function checkIphone(browser, vp) {
+  const pg = await browser.newPage();
+  try {
+    await pg.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: vp.dpr, hasTouch: true, isMobile: true });
+    await pg.setUserAgent(IPHONE_UA);
+    await pg.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await pg.waitForFunction('window.__terminalOne', { timeout: 10000 });
+    await pg.waitForFunction(() => !!document.querySelector('.t1-chrome-fab'), { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 300));
+
+    const m = await pg.evaluate(() => {
+      const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, width: b.width, height: b.height, display: getComputedStyle(el).display }; };
+      return {
+        vw: window.innerWidth, vh: window.innerHeight,
+        device: document.body.dataset.device,
+        fab: r(document.querySelector('.t1-chrome-fab')),
+        keybar: r(document.querySelector('#keybarIphone')),
+        key: r(document.querySelector('#keybarIphone .kb-key')),
+        footer: r(document.querySelector('.terminal-footer')),
+        docScrollW: document.documentElement.scrollWidth,
+        docScrollH: document.documentElement.scrollHeight
+      };
+    });
+
+    assert(m.device === 'iphone', `${vp.name}: detectDevice → iphone (got ${m.device})`);
+    assert(m.docScrollW - m.vw <= 1, `${vp.name}: no horizontal overflow (scrollW=${m.docScrollW} ≤ vw=${m.vw})`);
+    assert(m.docScrollH - m.vh <= 1, `${vp.name}: no vertical overflow (scrollH=${m.docScrollH} ≤ vh=${m.vh})`);
+    // R1: chrome toggle on-screen at any size (the off-screen-right bug).
+    assert(m.fab && m.fab.display !== 'none', `${vp.name}: chrome toggle present`);
+    assert(m.fab.left >= -1 && m.fab.right <= m.vw + 1, `${vp.name}: chrome toggle within viewport X (left=${Math.round(m.fab.left)}, right=${Math.round(m.fab.right)}, vw=${m.vw})`);
+    assert(m.fab.top >= -1 && m.fab.bottom <= m.vh + 1, `${vp.name}: chrome toggle within viewport Y (top=${Math.round(m.fab.top)}, bottom=${Math.round(m.fab.bottom)}, vh=${m.vh})`);
+    // R3: 44pt touch targets.
+    assert(m.fab.width >= 44 && m.fab.height >= 44, `${vp.name}: chrome toggle >=44pt (${Math.round(m.fab.width)}x${Math.round(m.fab.height)})`);
+    assert(m.key && m.key.height >= 44, `${vp.name}: keybar key >=44pt tall (${Math.round(m.key.height)})`);
+    // R2: control bar visible + within viewport.
+    assert(m.keybar && m.keybar.display === 'flex', `${vp.name}: control bar (keybar) visible`);
+    assert(m.keybar.bottom <= m.vh + 1, `${vp.name}: control bar within viewport (bottom=${Math.round(m.keybar.bottom)} ≤ ${m.vh})`);
+    assert(m.footer.bottom <= m.vh + 1, `${vp.name}: footer within viewport (bottom=${Math.round(m.footer.bottom)} ≤ ${m.vh})`);
+
+    // R2 under collapse: hiding chrome must NOT hide the control bar.
+    const collapsed = await pg.evaluate(() => {
+      window.__terminalOneChrome.setCollapsed(true);
+      const kb = document.querySelector('#keybarIphone');
+      const hd = document.querySelector('.terminal-header');
+      const out = { keybarDisplay: getComputedStyle(kb).display, keybarBottom: kb.getBoundingClientRect().bottom, headerHidden: getComputedStyle(hd).display === 'none', vh: window.innerHeight };
+      window.__terminalOneChrome.setCollapsed(false);
+      return out;
+    });
+    assert(collapsed.keybarDisplay === 'flex', `${vp.name}: control bar STAYS visible when chrome collapsed`);
+    assert(collapsed.keybarBottom <= collapsed.vh + 1, `${vp.name}: control bar within viewport when collapsed`);
+    assert(collapsed.headerHidden, `${vp.name}: header hidden when collapsed (terminal gains space)`);
   } finally {
     await pg.close();
   }
@@ -163,9 +247,20 @@ async function run() {
     const puppeteer = require('puppeteer');
     browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
 
-    for (const vp of VIEWPORTS) {
-      console.log(`\n[${vp.name}] ${vp.width}×${vp.height} @${vp.dpr}x`);
-      await checkViewport(browser, vp);
+    // RESP_DEVICE=ipad|iphone runs a subset (each browser load is ~1.3s; the
+    // harness caps a single command at 30s, so subsets keep receipts complete).
+    const only = process.env.RESP_DEVICE || '';
+    if (only !== 'iphone') {
+      for (const vp of VIEWPORTS) {
+        console.log(`\n[${vp.name}] ${vp.width}×${vp.height} @${vp.dpr}x`);
+        await checkViewport(browser, vp);
+      }
+    }
+    if (only !== 'ipad') {
+      for (const vp of IPHONE_VIEWPORTS) {
+        console.log(`\n[${vp.name}] ${vp.width}×${vp.height} @${vp.dpr}x`);
+        await checkIphone(browser, vp);
+      }
     }
 
     console.log('\nAll responsive layout checks passed!');

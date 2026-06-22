@@ -1,65 +1,88 @@
 /**
- * Phone landscape full-width terminal focus mode (iPhone).
+ * Chrome toggle + landscape focus (iPhone + iPad).
  *
- * When an iPhone rotates to landscape, hide header/status/footer/key bar and
- * expand the terminal to the full viewport. A floating button restores chrome.
+ * Provides a persistent, always-on-screen floating toggle that collapses the
+ * top header and bottom footer chrome to maximize terminal space. The on-screen
+ * control bar (keybar) is NEVER hidden — it stays visible at the bottom on every
+ * viewport size and orientation.
+ *
+ * The toggle is centered at the top and clamped inside the safe-area insets, so
+ * a notch / Dynamic Island can never push it off-screen (the prior version used
+ * `right: 12px`, which clipped off the right edge on notched devices in
+ * landscape). It is a >=44pt touch target per Apple HIG.
  */
 export function init(T1) {
-  if (T1.device !== 'iphone') return;
+  if (T1.device !== 'iphone' && T1.device !== 'ipad') return;
 
   T1.ui.addStyle(`
-    body[data-device="iphone"].t1-landscape-focus .app-shell {
-      height: 100dvh; grid-template-rows: 1fr;
-    }
-    body[data-device="iphone"].t1-landscape-focus .terminal-header,
-    body[data-device="iphone"].t1-landscape-focus .terminal-footer,
-    body[data-device="iphone"].t1-landscape-focus .keybar,
-    body[data-device="iphone"].t1-landscape-focus .featurebar {
+    /* Collapsed chrome hides header + footer + feature toolbar — but NEVER the
+       keybar (control bar), which must stay visible at the bottom always. */
+    body.t1-chrome-collapsed .terminal-header,
+    body.t1-chrome-collapsed .terminal-footer,
+    body.t1-chrome-collapsed .t1toolbar {
       display: none !important;
     }
-    body[data-device="iphone"].t1-landscape-focus .terminal-container {
-      padding: 0; height: 100dvh;
-    }
-    .t1-landscape-fab {
+    /* Always-on-screen chrome toggle. Centered + safe-area clamped so it can
+       never sit off-screen or under a notch on any iPhone/iPad viewport. */
+    .t1-chrome-fab {
       display: none;
       position: fixed;
-      right: 12px; top: 12px;
-      z-index: 300;
-      padding: 8px 10px;
-      font-size: 11px;
-      border-radius: 6px;
+      top: max(8px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 350;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 8px 18px;
+      font-size: 12px;
+      line-height: 1;
+      border-radius: 999px;
       background: var(--ui-elevated);
       border: 1px solid var(--ui-border);
       color: var(--ui-fg);
-      opacity: 0.7;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.35);
+      opacity: 0.82;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
-    body[data-device="iphone"].t1-landscape-focus .t1-landscape-fab { display: block; }
+    .t1-chrome-fab:active { opacity: 1; }
+    body[data-device="iphone"] .t1-chrome-fab,
+    body[data-device="ipad"] .t1-chrome-fab {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
   `);
 
   const fab = document.createElement('button');
   fab.type = 'button';
-  fab.className = 't1-landscape-fab';
-  fab.textContent = 'Show chrome';
-  fab.setAttribute('aria-label', 'Restore header and footer');
+  fab.className = 't1-chrome-fab';
   document.body.appendChild(fab);
 
-  function isLandscape() {
-    return Math.abs(window.orientation) === 90 || window.innerWidth > window.innerHeight;
+  let collapsed = false;
+  function render() {
+    document.body.classList.toggle('t1-chrome-collapsed', collapsed);
+    fab.textContent = collapsed ? 'Show bars' : 'Hide bars';
+    fab.setAttribute(
+      'aria-label',
+      collapsed ? 'Show header and footer' : 'Hide header and footer for more terminal space'
+    );
+    fab.setAttribute('aria-pressed', String(collapsed));
   }
-
-  function update() {
-    if (isLandscape()) document.body.classList.add('t1-landscape-focus');
-    else document.body.classList.remove('t1-landscape-focus');
-  }
-
-  fab.addEventListener('click', () => {
-    document.body.classList.remove('t1-landscape-focus');
+  function setCollapsed(v) {
+    collapsed = !!v;
+    render();
     T1.fit();
-  });
+  }
 
-  window.addEventListener('orientationchange', update, { passive: true });
-  window.addEventListener('resize', update, { passive: true });
-  update();
+  fab.addEventListener('click', () => setCollapsed(!collapsed));
+  render();
 
-  window.__terminalOneLandscapeFocus = { update, fab, isLandscape };
+  // Surface for automated tests + other features.
+  window.__terminalOneChrome = {
+    fab,
+    isCollapsed: () => collapsed,
+    setCollapsed,
+    toggle: () => setCollapsed(!collapsed)
+  };
 }

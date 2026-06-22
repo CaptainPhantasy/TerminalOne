@@ -3,6 +3,10 @@
 <head>
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="apple-mobile-web-app-title" content="TerminalOne">
  <title>TerminalOne</title>
  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
  <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,6 +52,7 @@
    display: flex;
    flex-direction: column;
    height: 100vh;
+   height: 100dvh;
    width: 100vw;
    background: transparent;
   }
@@ -141,8 +146,8 @@
   .keybar .kb-group:last-child { border-right: none; padding-right: 0; }
   .keybar .kb-key {
    flex: 0 0 auto;
-   min-width: 32px;
-   min-height: 32px;
+   min-width: 44px;
+   min-height: 44px;
    display: inline-flex;
    align-items: center;
    justify-content: center;
@@ -160,7 +165,7 @@
    -webkit-user-select: none;
    transition: background-color 0.08s ease, border-color 0.08s ease;
   }
-  body[data-device="ipad"] .keybar .kb-key { min-width: 40px; min-height: 36px; font-size: 14px; }
+  body[data-device="ipad"] .keybar .kb-key { min-width: 44px; min-height: 44px; font-size: 14px; }
   .keybar .kb-key:active { background: var(--ui-accent); color: #000; border-color: var(--ui-accent); }
   .keybar .kb-key.toggle.active {
    background: var(--ui-accent);
@@ -1215,6 +1220,29 @@
   })();
 
   connect();
+
+  // Best-effort: on touch devices only, shed the browser URL bar by entering
+  // fullscreen on the first user gesture. Gated to iPhone/iPad so a desktop
+  // click is never hijacked into fullscreen. iPhone Safari has no element
+  // Fullscreen API (the requestFullscreen guard no-ops there); the real
+  // chrome-hiding path on iPhone is PWA standalone (Add to Home Screen).
+  (function attemptFullscreenOnce() {
+   const dev = detectDevice();
+   if (dev !== 'iphone' && dev !== 'ipad') return;
+   const standalone =
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+    window.navigator.standalone === true;
+   if (standalone) return;
+   const target = document.querySelector('.app-shell') || document.documentElement;
+   if (!target || !target.requestFullscreen) return;
+   function go() {
+    document.removeEventListener('pointerdown', go);
+    document.removeEventListener('keydown', go);
+    if (!document.fullscreenElement) target.requestFullscreen().catch(() => {});
+   }
+   document.addEventListener('pointerdown', go, { passive: true });
+   document.addEventListener('keydown', go);
+  })();
 
   // Expose for automated tests.
   window.__terminalOne = {

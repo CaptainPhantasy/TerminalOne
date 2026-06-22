@@ -196,7 +196,7 @@ async function run() {
       features: window.__t1Features || [],
       smartSuggest: !!document.querySelector('.t1-smart-suggest'),
       swipeHistory: !!document.querySelector('.t1-swipe-history-tray'),
-      landscapeFab: !!document.querySelector('.t1-landscape-fab')
+      chromeFab: !!document.querySelector('.t1-chrome-fab')
     }));
     assert(phoneState.device === 'iphone', `phone UA → device=iphone (got ${phoneState.device})`);
     assert(phoneState.features.includes('smart-suggest'), 'smart-suggest loaded on iphone');
@@ -204,6 +204,7 @@ async function run() {
     assert(phoneState.features.includes('phone-landscape-focus'), 'phone-landscape-focus loaded on iphone');
     assert(phoneState.smartSuggest, 'smart-suggest bar rendered on iphone');
     assert(phoneState.swipeHistory, 'swipe-history tray rendered on iphone');
+    assert(phoneState.chromeFab, 'chrome toggle (.t1-chrome-fab) rendered on iphone');
     await phone.close();
 
     // ── Device gating: desktop UA must NOT load phone-only features ─────────
