@@ -7,3 +7,6 @@ node_modules/
 .floyd/
 .supercache/
 FLOYD.md
+
+# ─── Quarantine (Douglas review queue — files preserved, never deleted by agent) ──
+.quarantine/
