@@ -1,7 +1,12 @@
 {
   "name": "terminalone",
   "version": "1.0.0",
-  "description": "Generic WebSocket terminal emulator",
+  "description": "A browser-based terminal emulator — your shell, in your browser, with 38 feature modules and PWA install. Free. No subscription. No catch.",
+  "license": "MIT",
+  "repository": "github:CaptainPhantasy/TerminalOne",
+  "homepage": "https://github.com/CaptainPhantasy/TerminalOne#readme",
+  "bugs": "https://github.com/CaptainPhantasy/TerminalOne/issues",
+  "keywords": ["terminal", "emulator", "browser", "pty", "websocket", "xterm", "pwa", "shell"],
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
