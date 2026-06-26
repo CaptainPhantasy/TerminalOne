@@ -55,9 +55,11 @@ The other 20-ish features are variations on "we thought of one more thing and th
 
 ---
 
-## The Part Where We Install It (This Whole Section Is Six Lines)
+## The Part Where We Install It
 
 You need Node.js. Version 16 or newer. If you don't have it, that's a you problem and also a problem we're not solving in a README.
+
+**Just run it:**
 
 ```bash
 ./start.sh
@@ -65,13 +67,29 @@ You need Node.js. Version 16 or newer. If you don't have it, that's a you proble
 
 Browser opens. Terminal's there. Done.
 
-**Want it always-on on macOS?**
+**Want it always-on on macOS, launchable from anywhere?**
 
 ```bash
 ./scripts/install-service.sh
 ```
 
-Now type `t1` whenever you want a terminal. It'll be there. It's always there. Like a cat on a keyboard.
+This does four honest things, all reversible:
+1. Installs a per-user macOS service (launchd) that starts at login and restarts on crash.
+2. Installs a real `t1` command on your **internal** disk and adds its directory to your PATH. It lives on the internal disk on purpose — if the app's external volume unmounts, `t1` doesn't break silently, it tells you the drive isn't mounted.
+3. Installs `TerminalOne.app` (into `/Applications` or `~/Applications`). It shows up in **Spotlight** (Cmd-Space → "TerminalOne") and Launchpad — no terminal required; launches Chrome in app mode.
+4. Clears the bundle's quarantine flag so it opens without a Gatekeeper prompt.
+
+The installer prints whether it added `t1` to your PATH. If it did, open a new shell (or `source ~/.zshrc`) once, then `t1` works everywhere. After that, launch it however you like: type `t1`, hit Spotlight, or launch from Launchpad.
+**Want it on your iPad/iPhone?**
+
+The iPad doesn't run the server — it connects to the Mac that does, over your local network. So:
+
+1. On the Mac, run `./scripts/install-service.sh` (or `./start.sh`) so the server is up on port 11001.
+2. Find the Mac's LAN address: `ipconfig getifaddr $(route get default 2>/dev/null | awk '/interface:/{print $2}')` (e.g. `192.168.1.99`).
+3. On the iPad, open **Safari** and go to `http://<that-address>:11001`.
+4. Tap **Share → Add to Home Screen**. Now it launches fullscreen, no Safari chrome, like a native app.
+
+That works over plain http on your LAN — no certificate, no app store, no account. (The offline service worker only activates over https/localhost; on the iPad you get the installed fullscreen app without it, which is the part that matters.)
 
 **Want it gone?**
 
@@ -79,9 +97,9 @@ Now type `t1` whenever you want a terminal. It'll be there. It's always there. L
 ./scripts/uninstall-service.sh
 ```
 
-We're not clingy.
+Removes the service, the `t1` command, the PATH line, and the app bundle. We checked — it actually removes all of it. We're not clingy.
 
-That's the entire installation section. We refuse to elaborate.
+Mac and iPad on the same network is the only requirement we won't hand-wave. Everything else, the installer handles.
 
 ---
 
@@ -129,7 +147,7 @@ Yeah. It was worth it.
 │  What it costs:    Nothing                                │
 │  Features:         38 modules, 20 ShellFish-parity PASS   │
 │  Port:             11001 (just the one)                   │
-│  Launch command:   t1 (two characters, we're efficient)   │
+│  Launch:           t1, Spotlight, Dock, iPad              │
 │  App Store:        Not involved                           │
 │  Subscription:     Not involved                           │
 │  Cats on staff:    2 (Bella: QA, Bowser: Infrastructure)  │

@@ -154,3 +154,9 @@ If any requested item has no evidence row, final status MUST be INCOMPLETE.
 - 2026-06-17T14:07:02-04:00 — Governance orchestrator verified bootstrap and workers. Receipt: /Users/douglastalley/.omp/governance/receipts/TerminalOne-orchestrator-20260617-140701.json
 
 - 2026-06-17T14:18:58-04:00 — Governance orchestrator verified bootstrap and workers. Receipt: /Users/douglastalley/.omp/governance/receipts/TerminalOne-orchestrator-20260617-141858.json
+
+- 2026-06-22T18:54:31-04:00 — Governance orchestrator verified bootstrap and workers. Receipt: /Users/douglastalley/.omp/governance/receipts/TerminalOne-orchestrator-20260622-185430.json
+
+- 2026-06-22T21:14:57-04:00 — Governance orchestrator verified bootstrap and workers. Receipt: /Users/douglastalley/.omp/governance/receipts/TerminalOne-orchestrator-20260622-211456.json
+
+- 2026-06-26T17:40:14-04:00 — Governance orchestrator verified bootstrap and workers. Receipt: /Users/douglastalley/.omp/governance/receipts/TerminalOne-orchestrator-20260626-174013.json

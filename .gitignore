@@ -10,3 +10,4 @@ FLOYD.md
 
 # ─── Quarantine (Douglas review queue — files preserved, never deleted by agent) ──
 .quarantine/
+.aider*

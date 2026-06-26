@@ -2,7 +2,9 @@
 #
 # t1 — open TerminalOne. Ensures the always-on service is running, waits for it to
 # be healthy, then opens the UI as a chrome-less app window (falls back to the
-# default browser). Add a shortcut with:  alias t1="/Volumes/SanDisk1Tb/TerminalOne/scripts/t1.sh"
+# default browser). This is the volume-resident implementation; install-service.sh
+# generates a self-contained `t1` binary on the internal disk that delegates here,
+# plus ~/Applications/TerminalOne.app. Run install once, then use `t1` or Spotlight.
 #
 set -euo pipefail
 
