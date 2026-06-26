@@ -11,3 +11,5 @@ FLOYD.md
 # ─── Quarantine (Douglas review queue — files preserved, never deleted by agent) ──
 .quarantine/
 .aider*
+# Session handoffs — internal topology, never ship
+docs/HANDOFF.md
