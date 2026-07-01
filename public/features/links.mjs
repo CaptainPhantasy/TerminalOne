@@ -78,7 +78,7 @@ export function init(T1) {
 
     // Right-click/long-press on links. xterm wraps link text in spans with
     // the xterm-decoration-inline-anchor class when WebLinksAddon is active.
-    screenEl.addEventListener('contextmenu', (e) => {
+    function onContextMenu(e) {
       const anchor = e.target.closest?.('a');
       if (anchor) {
         e.preventDefault();
@@ -91,12 +91,12 @@ export function init(T1) {
         e.preventDefault();
         showMenu(e.clientX, e.clientY, null, filename);
       }
-    });
+    }
 
     // Also add filename highlighting by scanning rows. We do not modify xterm
     // internals; instead we listen for mousemove and show a tooltip for paths.
     let tooltip = null;
-    screenEl.addEventListener('mousemove', (e) => {
+    function onMouseMove(e) {
       const text = e.target.textContent || '';
       const filename = extractFilename(text);
       if (!filename) {
@@ -115,8 +115,19 @@ export function init(T1) {
       tooltip.style.left = `${e.clientX + 12}px`;
       tooltip.style.top = `${e.clientY + 12}px`;
       tooltip.classList.add('open');
-    });
-    screenEl.addEventListener('mouseleave', () => { if (tooltip) { tooltip.remove(); tooltip = null; } });
+    }
+    function onMouseLeave() { if (tooltip) { tooltip.remove(); tooltip = null; } }
+
+    screenEl.addEventListener('contextmenu', onContextMenu);
+    screenEl.addEventListener('mousemove', onMouseMove);
+    screenEl.addEventListener('mouseleave', onMouseLeave);
+
+    return () => {
+      screenEl.removeEventListener('contextmenu', onContextMenu);
+      screenEl.removeEventListener('mousemove', onMouseMove);
+      screenEl.removeEventListener('mouseleave', onMouseLeave);
+      if (tooltip) { tooltip.remove(); tooltip = null; }
+    };
   });
 }
 
