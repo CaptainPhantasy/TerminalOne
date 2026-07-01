@@ -72,11 +72,29 @@ export function init(T1) {
     if (suffix) T1.sendData(suffix + ' ');
   }
 
+  let updateRaf = 0;
+  function scheduleUpdate() {
+    if (updateRaf) return;
+    updateRaf = requestAnimationFrame(() => {
+      updateRaf = 0;
+      update();
+    });
+  }
+
   T1.onTermReady((term) => {
-    term.onData(update);
-    term.element.addEventListener('keydown', (e) => {
+    const dataDisposable = term.onData(scheduleUpdate);
+    const onKeyDown = (e) => {
       if (e.key === 'Tab') { e.preventDefault(); accept(); }
-    }, { capture: true });
+    };
+    term.element.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => {
+      if (updateRaf) {
+        cancelAnimationFrame(updateRaf);
+        updateRaf = 0;
+      }
+      dataDisposable.dispose();
+      term.element?.removeEventListener('keydown', onKeyDown, { capture: true });
+    };
   });
 
   window.__terminalOneSmartCompletions = { candidates, accept, hint, update };

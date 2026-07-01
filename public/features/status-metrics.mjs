@@ -74,20 +74,29 @@ export function init(T1) {
   footerObserver.observe(footerMeta, { childList: true });
 
   // Lightweight latency probe: send a no-op ping every 10s when connected.
+  let pingInFlight = false;
   setInterval(() => {
+    if (pingInFlight) return;
     const ws = T1.ws || window.__terminalOne?.ws;
     if (ws && ws.readyState === WebSocket.OPEN) {
       const start = performance.now();
+      pingInFlight = true;
       const handler = (evt) => {
         try {
           const msg = JSON.parse(evt.data);
           if (msg.type === 'pong') {
             ws.removeEventListener('message', handler);
+            clearTimeout(timeout);
+            pingInFlight = false;
             rttMs = performance.now() - start;
             updateFooter();
           }
         } catch (_) {}
       };
+      const timeout = setTimeout(() => {
+        ws.removeEventListener('message', handler);
+        pingInFlight = false;
+      }, 5_000);
       ws.addEventListener('message', handler);
       ws.send(JSON.stringify({ type: 'ping' }));
     }

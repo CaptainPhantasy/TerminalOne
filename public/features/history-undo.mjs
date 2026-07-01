@@ -64,12 +64,14 @@ export function init(T1) {
 
   // Hook Enter presses to snapshot the typed line.
   T1.onTermReady((term) => {
-    const original = term._core?.handler;
-    term.onData((data) => {
+    let captureTimer = 0;
+    const dataDisposable = term.onData((data) => {
       if (data === '\r') {
         // xterm does not expose a synchronous "current line"; wait a tick
         // so the shell echo has landed, then read the active row.
-        setTimeout(() => {
+        if (captureTimer) clearTimeout(captureTimer);
+        captureTimer = setTimeout(() => {
+          captureTimer = 0;
           try {
             const row = term.buffer.active.getLine(term.buffer.active.cursorY);
             const text = row ? row.translateToString(true) : '';
@@ -79,6 +81,10 @@ export function init(T1) {
         }, 50);
       }
     });
+    return () => {
+      if (captureTimer) clearTimeout(captureTimer);
+      dataDisposable.dispose();
+    };
   });
 
   // Global shortcuts: Ctrl+Z undo (back), Ctrl+Y redo (forward), Ctrl+Shift+Z also forward.
