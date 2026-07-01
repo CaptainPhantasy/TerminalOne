@@ -202,7 +202,9 @@ case ":$PATH:" in
     MARK="# added by TerminalOne install-service.sh"
     LINE="export PATH=\"$T1_BIN_DIR:\$PATH\"  $MARK"
     for rc in "$HOME/.zshrc" "$HOME/.bash_profile"; do
-      [ -e "$rc" ] || { [ "$rc" = "$HOME/.zshrc" ] && touch "$rc" || continue; }
+      if [ ! -e "$rc" ]; then
+        if [ "$rc" = "$HOME/.zshrc" ]; then touch "$rc"; else continue; fi
+      fi
       if ! grep -qF "$MARK" "$rc" 2>/dev/null; then
         printf '\n%s\n' "$LINE" >> "$rc" && T1_PATH_ADDED="$rc"
       fi
