@@ -9,8 +9,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # src/server.js falls back to /bin/zsh when SHELL is unset; zsh is not
+      # installed on ubuntu-latest. Bash is the default login shell on the
+      # runner, so mirror that explicitly to keep the spawned PTY healthy.
+      SHELL: /bin/bash
     steps:
       - uses: actions/checkout@v4
+
+      # node-pty is a native addon with no prebuilt binaries — it compiles
+      # via node-gyp on install. ubuntu-latest ships build-essential by
+      # default, but install explicitly so a runner image change can never
+      # break the build silently.
+      - name: Install build tools (for node-pty native compile)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq build-essential python3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -29,8 +41,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to a stable major tag instead of @master so a breaking
+      # change upstream can't silently turn CI red.
       - name: Run shellcheck on scripts
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: './scripts'
           severity: warning
