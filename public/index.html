@@ -28,7 +28,14 @@
   }
 
   * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; overflow: hidden; }
+  html {
+   height: 100%;
+   margin: 0;
+   overflow: hidden;
+   -webkit-font-smoothing: antialiased;
+   -moz-osx-font-smoothing: grayscale;
+  }
+  body { height: 100%; margin: 0; overflow: hidden; }
   body {
    background: var(--ui-bg);
    color: var(--ui-fg);
@@ -109,10 +116,16 @@
    font-family: inherit;
    font-size: 12px;
    cursor: pointer;
-   transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+   transition-property: background-color, color, border-color, transform;
+   transition-duration: 0.12s;
+   transition-timing-function: ease;
   }
   button:hover { border-color: var(--ui-accent); }
-  button:active { transform: scale(0.97); }
+  button:active { transform: scale(0.96); }
+  button:focus-visible {
+   outline: 2px solid var(--ui-accent);
+   outline-offset: 2px;
+  }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .terminal-container {
    flex: 1 1 auto;
@@ -166,10 +179,12 @@
    touch-action: manipulation;
    user-select: none;
    -webkit-user-select: none;
-   transition: background-color 0.08s ease, border-color 0.08s ease;
+   transition-property: background-color, border-color, color, transform;
+   transition-duration: 0.08s;
+   transition-timing-function: ease;
   }
   body[data-device="ipad"] .keybar .kb-key { min-width: 44px; min-height: 44px; font-size: 14px; }
-  .keybar .kb-key:active { background: var(--ui-accent); color: #000; border-color: var(--ui-accent); }
+  .keybar .kb-key:active { background: var(--ui-accent); color: #000; border-color: var(--ui-accent); transform: scale(0.96); }
   .keybar .kb-key.toggle.active {
    background: var(--ui-accent);
    color: #000;
@@ -283,7 +298,7 @@
    cursor: pointer;
  }
  .t1button:hover { border-color: var(--ui-accent); }
- .t1button:active { transform: scale(0.97); }
+ .t1button:active { transform: scale(0.96); }
  .t1button.active { background: var(--ui-accent); color: #000; border-color: var(--ui-accent); }
  /* Toast notifications — transient, stacked, auto-dismissing. */
  .t1toast-host {
@@ -490,6 +505,8 @@
   let currentTheme = DEFAULT_THEME;
   let currentStyle = DEFAULT_STYLE;
   let rain = null; // lazily created digital-rain controller
+  let fitTimer = null;
+  let terminalResourceDisposers = [];
 
   // Module-level input sender. initTerminal() (which owns the dictation guard
   // and the real sendInput closure) sets this so key-bar buttons outside the
@@ -499,6 +516,26 @@
   let modState = { ctrl: false, alt: false };
 
   const $ = (sel) => document.querySelector(sel);
+
+  function addTerminalResource(disposer) {
+   if (!disposer) return;
+   if (typeof disposer === 'function') {
+    terminalResourceDisposers.push(disposer);
+   } else if (typeof disposer.dispose === 'function') {
+    terminalResourceDisposers.push(() => disposer.dispose());
+   }
+  }
+
+  function cleanupTerminalResources() {
+   if (fitTimer) {
+    clearTimeout(fitTimer);
+    fitTimer = null;
+   }
+   const disposers = terminalResourceDisposers.splice(0).reverse();
+   for (const dispose of disposers) {
+    try { dispose(); } catch (_) {}
+   }
+  }
 
   // ── Settings persistence ──────────────────────────────────────────────────
   function lsGet(key, fallback) {
@@ -635,7 +672,9 @@
   function setSessionInfo(text) { $('#sessionInfo').textContent = text; }
 
   function scheduleFit(delay = 0) {
-   window.setTimeout(() => {
+   if (fitTimer) clearTimeout(fitTimer);
+   fitTimer = window.setTimeout(() => {
+    fitTimer = null;
     if (!fitAddon || !term) return;
     try { fitAddon.fit(); } catch (_) {}
    }, delay);
@@ -836,16 +875,16 @@
     momentumRaf = requestAnimationFrame(momentumStep);
    }
 
-   screen.addEventListener('touchstart', (e) => {
+   const onTouchStart = (e) => {
     if (e.touches.length !== 2) return;
     scrolling = true;
     stopMomentum();
     lastY = avgY(e.touches);
     velocity = 0;
     lastMoveTs = Date.now();
-   }, { passive: true });
+   };
 
-   screen.addEventListener('touchmove', (e) => {
+   const onTouchMove = (e) => {
     if (!scrolling) return;
     e.preventDefault();
     const cur = avgY(e.touches);
@@ -858,7 +897,7 @@
     velocity = dy / dt * 16; // px per ~frame
     lastY = cur;
     lastMoveTs = now;
-   }, { passive: false });
+   };
 
    const endScroll = (e) => {
     if (!scrolling) return;
@@ -866,12 +905,22 @@
     scrolling = false;
     momentumRaf = requestAnimationFrame(momentumStep);
    };
+   screen.addEventListener('touchstart', onTouchStart, { passive: true });
+   screen.addEventListener('touchmove', onTouchMove, { passive: false });
    screen.addEventListener('touchend', endScroll, { passive: true });
    screen.addEventListener('touchcancel', endScroll, { passive: true });
+   return () => {
+    stopMomentum();
+    screen.removeEventListener('touchstart', onTouchStart);
+    screen.removeEventListener('touchmove', onTouchMove);
+    screen.removeEventListener('touchend', endScroll);
+    screen.removeEventListener('touchcancel', endScroll);
+   };
   }
 
   // ── Terminal ────────────────────────────────────────────────────────────────
   function initTerminal() {
+   cleanupTerminalResources();
    if (term) {
     try { term.dispose(); } catch (_) {}
    }
@@ -895,7 +944,7 @@
    term.open($('#terminal'));
    requestAnimationFrame(() => fitAddon.fit());
 
-   initTouchScroll();
+   addTerminalResource(initTouchScroll());
 
  // ── iOS dictation / typing guard ────────────────────────────────────────
  // Replaced buggy inline debounce (which overwrote fast keystrokes) with
@@ -907,21 +956,21 @@
     ws.send(JSON.stringify({ type: 'input', data }));
    }
   }
+  const guard = new InputGuard({ send: sendInput, identicalDedupeMs: 500 });
   // Expose the sender to the on-screen key bar (outside this closure).
- sendInputFn = (data) => guard.send(data);
+  sendInputFn = (data) => guard.send(data);
 
- const guard = new InputGuard({ send: sendInput, identicalDedupeMs: 500 });
+  addTerminalResource(term.onData((data) => guard.onData(data)));
 
-  term.onData((data) => guard.onData(data));
-
-   term.onResize(({ cols, rows }) => {
+   addTerminalResource(term.onResize(({ cols, rows }) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
      ws.send(JSON.stringify({ type: 'resize', cols, rows }));
     }
-   });
+   }));
 
    const ro = new ResizeObserver(() => scheduleFit());
    ro.observe($('#terminal'));
+   addTerminalResource(() => ro.disconnect());
   }
 
   function handleServerMessage(msg) {
@@ -1056,6 +1105,7 @@
    }
 
    try { term?.dispose(); } catch (_) {}
+   cleanupTerminalResources();
    term = null;
    fitAddon = null;
    sendInputFn = null;
@@ -1115,14 +1165,18 @@
   // feature API contract expects, then dynamically imports every module and
   // runs its init() inside try/catch so one failure cannot break the app.
   const termReadyCbs = [];
+  function runTermReadyCallback(cb) {
+    if (!term) return;
+    try { addTerminalResource(cb(term)); } catch (_) {}
+  }
   function onTermReady(cb) {
     termReadyCbs.push(cb);
-    if (term) { try { cb(term); } catch (_) {} }
+    runTermReadyCallback(cb);
   }
   // Re-fire onTermReady callbacks whenever the terminal is recreated on
   // reconnect. initTerminal() already ran before this loader exists, so fire
   // for the current term now.
-  function __fireTermReady() { if (term) termReadyCbs.forEach((cb) => { try { cb(term); } catch (_) {} }); }
+  function __fireTermReady() { if (term) termReadyCbs.forEach(runTermReadyCallback); }
   const __origInitTerminal = initTerminal;
   initTerminal = function () { __origInitTerminal(); __fireTermReady(); };
   __fireTermReady();

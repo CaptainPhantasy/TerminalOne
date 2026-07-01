@@ -21,6 +21,7 @@ export function init(T1) {
 
   function onVisibility() {
     if (isHidden()) {
+      if (hiddenTimer) return;
       beat();
       hiddenTimer = setInterval(beat, INTERVAL_MS);
     } else {

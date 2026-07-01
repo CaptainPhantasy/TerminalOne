@@ -4,6 +4,8 @@
 
 ---
 
+[![CI](https://github.com/CaptainPhantasy/TerminalOne/actions/workflows/ci.yml/badge.svg)](https://github.com/CaptainPhantasy/TerminalOne/actions/workflows/ci.yml)
+
 **DOCUMENT CLASSIFICATION:** README / The Reason We're All Here
 **DATE RECORDED:** 2026-06-22 — Way Too Late At Night
 **LOCATION:** The Garage, Brown County, Indiana

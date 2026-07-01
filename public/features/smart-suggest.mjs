@@ -94,9 +94,25 @@ export function init(T1) {
     } catch (_) { bar.style.display = 'none'; }
   }
 
+  let updateRaf = 0;
+  function scheduleUpdate() {
+    if (updateRaf) return;
+    updateRaf = requestAnimationFrame(() => {
+      updateRaf = 0;
+      updateFromTerminal();
+    });
+  }
+
   T1.onTermReady((term) => {
-    term.onData(updateFromTerminal);
+    const dataDisposable = term.onData(scheduleUpdate);
     updateFromTerminal();
+    return () => {
+      if (updateRaf) {
+        cancelAnimationFrame(updateRaf);
+        updateRaf = 0;
+      }
+      dataDisposable.dispose();
+    };
   });
 
   // Expose for tests.
