@@ -39,6 +39,35 @@ All 5 suites pass. Full output at `/tmp/t1_fulltest.log` on the build machine (e
 | Uninstall clean | Removed plist, `t1` binary, PATH line, app bundle; port 11001 released | PASS |
 | Reinstall idempotent | Reinstall after uninstall: exit 0, all components restored | PASS |
 
+## Local launcher note (updated 2026-07-02)
+
+The app-first local launcher contract now treats launchd as a preferred fast-path, not a hard dependency. `TerminalOne.app` and `t1` are expected to check localhost first, nudge `com.floyd.terminalone` via `launchctl kickstart`, then fall back to direct local backend startup if launchd is absent or unhealthy. Direct fallback diagnostics are written to `~/Library/Logs/TerminalOne/local-launch.err.log`.
+
+This app-first local launcher direction exists to remove tailserve from the normal local-use path while preserving the existing `/Applications/TerminalOne.app` and `~/bin/t1` surfaces.
+
+## Local app launcher verification (executed 2026-07-02)
+
+| Claim | Test method | Result |
+|-------|-------------|--------|
+| App launcher works with launchd absent | `launchctl bootout gui/$(id -u)/com.floyd.terminalone`; `pkill -f '/Volumes/SanDisk1Tb/TerminalOne/src/server.js'`; `open -a /Applications/TerminalOne.app`; poll `curl -sf http://localhost:11001/health` | PASS |
+| Fallback starts a real backend | `lsof -nP -iTCP:11001 -sTCP:LISTEN` after app launch | PASS (`node` listening on `*:11001`) |
+| launchd remains optional, not required | `launchctl print gui/$(id -u)/com.floyd.terminalone` still returned “Could not find service” after successful app launch | PASS |
+| Direct-start logs are created | `ls ~/Library/Logs/TerminalOne/local-launch.{out,err}.log` | PASS |
+| Re-launch does not spawn duplicates | `pgrep -f '/Volumes/SanDisk1Tb/TerminalOne/src/server.js' | wc -l` stayed `1` before and after `open -a /Applications/TerminalOne.app` | PASS |
+| Launcher regression harness | `bash tests/t1-launch.test.sh` | PASS |
+| Docs/installer regression harness | `bash tests/t1-docs.test.sh` | PASS |
+| Full app regression suite | `npm test` | PASS |
+
+## Portability verification (executed 2026-07-02)
+
+The local receipts above use this machine's checkout path because they are evidence from this Mac. Portability was re-verified separately by simulating an alternate checkout path and running the installer there.
+
+| Claim | Test method | Result |
+|-------|-------------|--------|
+| `t1.sh` derives app root from its own script location | `bash tests/t1-launch.test.sh` copied `scripts/t1.sh` into a temp alternate checkout and ran it without `TERMINALONE_APP_DIR` | PASS |
+| `install-service.sh` writes artifacts for the current checkout, not this machine's historical path | `bash tests/install-service-portability.test.sh` created a temp alternate checkout, ran the installer with isolated HOME/bin/app dirs, and inspected the generated plist/stub/app bundle | PASS |
+| Generated launch artifacts do not reference `/Volumes/SanDisk1Tb/TerminalOne` | `grep` over generated alternate-checkout plist/stub/app bundle inside `tests/install-service-portability.test.sh` | PASS |
+
 ## PWA / iPad verification (executed 2026-06-22)
 
 | Prerequisite | Method | Result |

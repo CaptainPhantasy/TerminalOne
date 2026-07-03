@@ -7,7 +7,7 @@
 #   - Registers a per-user LaunchAgent that runs `node src/server.js` on PORT 11001
 #   - RunAtLoad (starts at login) + KeepAlive (auto-restart on crash)
 #   - KeepAlive is gated on PathState: it only runs while
-#     /Volumes/SanDisk1Tb/TerminalOne/src/server.js exists (i.e. the volume is
+#     the installed checkout's `src/server.js` exists (i.e. the app volume is
 #     mounted), and auto-starts when the volume re-appears.
 #   - Logs to ~/Library/Logs/com.floyd.terminalone.{out,err}.log (INTERNAL disk;
 #     launchd cannot reliably create log files on the external volume -> EX_CONFIG).
@@ -20,17 +20,21 @@
 #
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 LABEL="com.floyd.terminalone"
-APP_DIR="/Volumes/SanDisk1Tb/TerminalOne"
+APP_DIR="${TERMINALONE_APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
 PORT="${PORT:-11001}"
-NODE="$(command -v node || true)"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-LOG_DIR="$HOME/Library/Logs"
+NODE="${TERMINALONE_NODE:-$(command -v node || true)}"
+PLIST_DIR="${TERMINALONE_PLIST_DIR:-$HOME/Library/LaunchAgents}"
+PLIST="$PLIST_DIR/$LABEL.plist"
+LOG_DIR="${TERMINALONE_SYSTEM_LOG_DIR:-$HOME/Library/Logs}"
 DOMAIN="gui/$(id -u)"
+APP_PARENT_OVERRIDE="${TERMINALONE_APPLICATIONS_DIR:-}"
+T1_BIN_DIR_OVERRIDE="${TERMINALONE_BIN_DIR:-}"
 
 [ -n "$NODE" ] || { echo "ERROR: node not found in PATH"; exit 1; }
 [ -f "$APP_DIR/src/server.js" ] || { echo "ERROR: $APP_DIR/src/server.js not found (is the volume mounted?)"; exit 1; }
-mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
+mkdir -p "$PLIST_DIR" "$LOG_DIR"
 
 # NOTE: no WorkingDirectory key — the server resolves all paths via __dirname, and a
 # chdir into the external volume from the launchd context can itself trigger EX_CONFIG.
@@ -101,7 +105,7 @@ fi
 
 # --- Install `t1` as a REAL self-contained binary on the INTERNAL disk.
 # Not a symlink into the external volume: a symlink would dangle ("no such file")
-# the moment SanDisk1Tb unmounts. This generated stub lives on the internal disk,
+# the moment the app volume unmounts. This generated stub lives on the internal disk,
 # bakes in the app path, checks the mount, and fails LOUDLY (stderr + GUI dialog)
 # instead of cryptically when the volume is gone.
 chmod +x "$APP_DIR/scripts/t1.sh" 2>/dev/null || true
@@ -113,16 +117,21 @@ INTERNAL_DEV="$(df /System/Volumes/Data 2>/dev/null | tail -1 | awk '{print $1}'
 [ -n "$INTERNAL_DEV" ] || INTERNAL_DEV="$(df / | tail -1 | awk '{print $1}')"
 is_internal() { case "$1" in /Volumes/*) return 1;; esac; [ "$(df "$1" 2>/dev/null | tail -1 | awk '{print $1}')" = "$INTERNAL_DEV" ]; }
 T1_BIN_DIR=""
-for d in "$HOME/bin" /usr/local/bin "$HOME/.local/bin"; do
-  if [ -d "$d" ] && [ -w "$d" ] && is_internal "$d"; then T1_BIN_DIR="$d"; break; fi
-done
-if [ -z "$T1_BIN_DIR" ]; then
-  # Nothing writable+internal+existing; create ~/bin on the internal disk.
-  if mkdir -p "$HOME/bin" 2>/dev/null && is_internal "$HOME/bin"; then
-    T1_BIN_DIR="$HOME/bin"
-  else
-    T1_BIN_DIR="$HOME/.local/bin"; mkdir -p "$T1_BIN_DIR"
-    echo "  WARN  : no internal-disk bin dir found; t1 placed on $T1_BIN_DIR (may be external)."
+if [ -n "$T1_BIN_DIR_OVERRIDE" ]; then
+  mkdir -p "$T1_BIN_DIR_OVERRIDE"
+  T1_BIN_DIR="$T1_BIN_DIR_OVERRIDE"
+else
+  for d in "$HOME/bin" /usr/local/bin "$HOME/.local/bin"; do
+    if [ -d "$d" ] && [ -w "$d" ] && is_internal "$d"; then T1_BIN_DIR="$d"; break; fi
+  done
+  if [ -z "$T1_BIN_DIR" ]; then
+    # Nothing writable+internal+existing; create ~/bin on the internal disk.
+    if mkdir -p "$HOME/bin" 2>/dev/null && is_internal "$HOME/bin"; then
+      T1_BIN_DIR="$HOME/bin"
+    else
+      T1_BIN_DIR="$HOME/.local/bin"; mkdir -p "$T1_BIN_DIR"
+      echo "  WARN  : no internal-disk bin dir found; t1 placed on $T1_BIN_DIR (may be external)."
+    fi
   fi
 fi
 T1_LINK="$T1_BIN_DIR/t1"
@@ -148,7 +157,15 @@ chmod +x "$T1_LINK"
 # --- Make TerminalOne launchable from anywhere WITHOUT a terminal:
 # a tiny .app bundle -> shows in Spotlight, Launchpad, and Dock. Prefer /Applications
 # (canonically Spotlight-indexed); fall back to ~/Applications if it's not writable.
-if [ -w /Applications ]; then APP_PARENT="/Applications"; else APP_PARENT="$HOME/Applications"; mkdir -p "$APP_PARENT"; fi
+if [ -n "$APP_PARENT_OVERRIDE" ]; then
+  APP_PARENT="$APP_PARENT_OVERRIDE"
+  mkdir -p "$APP_PARENT"
+elif [ -w /Applications ]; then
+  APP_PARENT="/Applications"
+else
+  APP_PARENT="$HOME/Applications"
+  mkdir -p "$APP_PARENT"
+fi
 APP_BUNDLE="$APP_PARENT/TerminalOne.app"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 cat > "$APP_BUNDLE/Contents/Info.plist" <<APPEOF
@@ -215,10 +232,11 @@ esac
 echo "Installed $LABEL"
 echo "  plist : $PLIST"
 echo "  node  : $NODE"
-echo "  logs  : $LOG_DIR/$LABEL.{out,err}.log"
+echo "  logs  : $LOG_DIR/$LABEL.{out,err}.log and $LOG_DIR/TerminalOne/local-launch.err.log"
 echo "  url   : http://localhost:$PORT"
 echo "  t1    : ${T1_LINK:-(failed to link)}"
 echo "  app   : $APP_BUNDLE  (Spotlight: Cmd-Space -> TerminalOne)"
+echo "  app   : opens the UI only after health is confirmed; falls back to direct local startup if launchd is unavailable."
 echo "Manage: launchctl print $DOMAIN/$LABEL   |   stop: scripts/uninstall-service.sh"
 if [ -n "$T1_PATH_ADDED" ]; then
   echo "  PATH  : added $T1_BIN_DIR to $T1_PATH_ADDED — run 'source $T1_PATH_ADDED' or open a new shell, then 't1'."

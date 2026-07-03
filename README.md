@@ -78,10 +78,10 @@ Browser opens. Terminal's there. Done.
 This does four honest things, all reversible:
 1. Installs a per-user macOS service (launchd) that starts at login and restarts on crash.
 2. Installs a real `t1` command on your **internal** disk and adds its directory to your PATH. It lives on the internal disk on purpose — if the app's external volume unmounts, `t1` doesn't break silently, it tells you the drive isn't mounted.
-3. Installs `TerminalOne.app` (into `/Applications` or `~/Applications`). It shows up in **Spotlight** (Cmd-Space → "TerminalOne") and Launchpad — no terminal required; launches Chrome in app mode.
+3. Installs `TerminalOne.app` (into `/Applications` or `~/Applications`). It shows up in **Spotlight** (Cmd-Space → "TerminalOne") and Launchpad — no terminal required. The app launcher first checks localhost, then nudges launchd, then starts the backend directly if needed, and opens the UI only after health is confirmed.
 4. Clears the bundle's quarantine flag so it opens without a Gatekeeper prompt.
 
-The installer prints whether it added `t1` to your PATH. If it did, open a new shell (or `source ~/.zshrc`) once, then `t1` works everywhere. After that, launch it however you like: type `t1`, hit Spotlight, or launch from Launchpad.
+The installer prints whether it added `t1` to your PATH. If it did, open a new shell (or `source ~/.zshrc`) once, then `t1` works everywhere. After that, launch it however you like: type `t1`, hit Spotlight, or launch from Launchpad. If the direct local fallback fails, check `~/Library/Logs/TerminalOne/local-launch.err.log`.
 **Want it on your iPad/iPhone?**
 
 The iPad doesn't run the server — it connects to the Mac that does, over your local network. So:
