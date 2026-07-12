@@ -5,19 +5,19 @@
 
 ---
 
-## Source counts (verified 2026-06-26)
+## Source counts (verified 2026-07-12)
 
 | Metric | Value | Verification method |
 |--------|-------|--------------------|
 | Source files | 41 `.js`/`.mjs` | `find . -name '*.js' -o -name '*.mjs' -not -path './node_modules/*' \| wc -l` |
-| Feature modules | 38 in `public/features/` | `ls public/features/*.mjs \| wc -l` |
-| Test suites | 5 | `ls tests/*.js tests/*.mjs \| wc -l` |
+| Feature modules | 39 in `public/features/` | `ls public/features/*.mjs \| wc -l` |
+| Test suites | 6 | `ls tests/*.js tests/*.mjs \| wc -l` |
 | Server LOC | 549 | `wc -l < src/server.js` |
 | TODO/FIXME/HACK | 0 | `grep -r 'TODO\|FIXME\|HACK' src/ public/ --include='*.js' --include='*.mjs' \| wc -l` |
 
-## Test results (executed 2026-06-22)
+## Test results (executed 2026-07-12)
 
-All 5 suites pass. Full output at `/tmp/t1_fulltest.log` on the build machine (ends "All responsive layout checks passed!" then "EXIT=0").
+All 6 suites pass individually in this checkout; the voice suite uses a local mock Whisper executable so it does not download a model.
 
 | Test suite | Result | Notes |
 |-----------|--------|-------|
@@ -25,6 +25,7 @@ All 5 suites pass. Full output at `/tmp/t1_fulltest.log` on the build machine (e
 | smoke | PASS | `npm run test:smoke` — port 11001 |
 | feature | PASS | `npm run test:feature` — port 11002 |
 | feature-behavior | PASS | `npm run test:feature-behavior` — port 11004 |
+| voice | PASS | `npm run test:voice` — port 11005 |
 | responsive | PASS | ~15 device profiles across iPhone SE/15/Pro Max (portrait + landscape), iPad, desktop viewports — port 11003 |
 
 ## Install/uninstall verification (executed 2026-06-22)

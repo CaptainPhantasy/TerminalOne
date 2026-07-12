@@ -8,7 +8,7 @@
 **DATE RECORDED:** 2026-06-22 — 2:47 AM, Obviously
 **LOCATION:** The Garage, Brown County, Indiana
 **BEVERAGE:** Coffee that completed its arc from "bold roast" to "war crime"
-**CURRENT STATE:** 38 features deep and questioning everything
+**CURRENT STATE:** 39 features deep and questioning everything
 
 ---
 
@@ -18,7 +18,7 @@ A terminal emulator that lives in your browser.
 
 That's it. That's the pitch. No App Store. No provisioning profile. No $99/year to put a command prompt on your own iPad. No subscription that auto-renews while you sleep. You run a command, a browser tab opens, and you have a real terminal — PTY, scrollback, the works — on whatever screen is in front of you.
 
-Thirty-eight features deep. One port. Zero monthly invoices.
+Thirty-nine features deep. One port. Zero monthly invoices.
 
 ---
 

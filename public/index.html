@@ -1015,6 +1015,18 @@
      }
      break;
     }
+    case 'voice-ready': {
+     window.dispatchEvent(new CustomEvent('t1:voice-ready', { detail: msg }));
+     break;
+    }
+    case 'voice-transcript': {
+     window.dispatchEvent(new CustomEvent('t1:voice-transcript', { detail: msg }));
+     break;
+    }
+    case 'voice-error': {
+     window.dispatchEvent(new CustomEvent('t1:voice-error', { detail: msg }));
+     break;
+    }
     case 'error': {
      const errText = `\r\n\x1b[31m[ERROR ${msg.code}]\x1b[0m ${msg.message}\r\n`;
      term?.write(errText);
@@ -1255,7 +1267,7 @@
   const FEATURE_MODULES = [
     'theme-system', 'keyboard-shortcuts', 'history-undo', 'autosave',
     'recent-commands', 'search', 'command-palette', 'toast-status',
-    'osc-bridge', 'links', 'zoom', 'keybar-config', 'session-manager',
+    'osc-bridge', 'links', 'zoom', 'keybar-config', 'voice-input', 'session-manager',
     'status-metrics', 'export', 'clipboard', 'snippets', 'fontsize',
     'wake-fullscreen', 'desktop-palette', 'file-drop', 'floating-palette',
     'haptic-keys', 'keepalive', 'multi-window-sync', 'phone-landscape-focus',

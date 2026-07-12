@@ -2,7 +2,7 @@
 /**
  * Feature-behavior verification for TerminalOne.
  *
- * Where the load-probe only proved 38/38 features *import*, this file proves
+ * Where the load-probe only proved feature modules *import*, this file proves
  * they actually *do something*: the command palette opens, the search box
  * registers, the snippets row inserts commands, the toast system renders a
  * transient element, the device-getter gates per-device features, and the
@@ -90,6 +90,8 @@ async function run() {
       lockOverlay: !!document.querySelector('.t1-lock-overlay'),
       fileDrop: !!document.querySelector('.t1-file-drop-target'),
       shortcutOverlay: !!document.querySelector('.t1-shortcut-overlay'),
+      voiceButton: !!document.querySelector('.t1voice-button'),
+      voiceHook: !!window.__terminalOneVoiceInput,
       windowTitleHook: !!window.__terminalOneWindowTitle,
       keepaliveHook: !!window.__terminalOneKeepalive,
       multiWinHook: !!window.__terminalOneMultiWindow
@@ -108,6 +110,9 @@ async function run() {
     assert(dState.lockOverlay, 'session-lock overlay created');
     assert(dState.fileDrop, 'file-drop overlay created');
     assert(dState.shortcutOverlay, 'shortcut-help overlay created');
+    assert(dState.features.includes('voice-input'), 'voice-input feature loaded');
+    assert(dState.voiceButton, 'voice-input toolbar button rendered');
+    assert(dState.voiceHook, 'voice-input test hook exposed');
     assert(dState.keepaliveHook, 'keepalive feature exposed hook');
     assert(dState.multiWinHook, 'multi-window-sync feature exposed hook');
     await desktop.close();
@@ -162,6 +167,30 @@ async function run() {
     assert(paletteClosed === true, 'command palette closes on Escape');
     await ppage.close();
 
+    // ── Voice transcript insertion is final-only and review-before-run ─────
+    console.log('\nVoice transcript insertion:');
+    const vpage = await browser.newPage();
+    await vpage.evaluateOnNewDocument(() => {
+      window.__terminalOneSentFrames = [];
+      const originalSend = WebSocket.prototype.send;
+      WebSocket.prototype.send = function patchedSend(data) {
+        window.__terminalOneSentFrames.push(String(data));
+        return originalSend.call(this, data);
+      };
+    });
+    await vpage.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: 15000 });
+    await vpage.waitForFunction('window.__t1Features && window.__t1Features.includes("voice-input")', { timeout: 10000 });
+    const voiceInserted = await vpage.evaluate(async () => {
+      window.dispatchEvent(new CustomEvent('t1:voice-transcript', { detail: { text: 'git status.' } }));
+      await new Promise((r) => setTimeout(r, 250));
+      return window.__terminalOneSentFrames
+        .map((raw) => { try { return JSON.parse(raw); } catch (_) { return null; } })
+        .filter((msg) => msg && msg.type === 'input');
+    });
+    assert(voiceInserted.length === 1, `voice transcript emits exactly one input frame (${voiceInserted.length})`);
+    assert(voiceInserted[0].data === 'git status', `voice transcript inserts normalized text without Enter (${JSON.stringify(voiceInserted[0].data)})`);
+    await vpage.close();
+
     // ── Snippets inserts a command into the PTY ─────────────────────────────
     console.log('\nSnippets insertion:');
     const spage = await loadDesktop(browser);
@@ -195,6 +224,7 @@ async function run() {
       device: window.__terminalOne.device,
       features: window.__t1Features || [],
       smartSuggest: !!document.querySelector('.t1-smart-suggest'),
+      voiceKey: !!document.querySelector('#keybarIphone .t1voice-key'),
       swipeHistory: !!document.querySelector('.t1-swipe-history-tray'),
       chromeFab: !!document.querySelector('.t1-chrome-fab')
     }));
@@ -203,6 +233,7 @@ async function run() {
     assert(phoneState.features.includes('swipe-history'), 'swipe-history loaded on iphone');
     assert(phoneState.features.includes('phone-landscape-focus'), 'phone-landscape-focus loaded on iphone');
     assert(phoneState.smartSuggest, 'smart-suggest bar rendered on iphone');
+    assert(phoneState.voiceKey, 'voice-input key rendered on iphone keybar');
     assert(phoneState.swipeHistory, 'swipe-history tray rendered on iphone');
     assert(phoneState.chromeFab, 'chrome toggle (.t1-chrome-fab) rendered on iphone');
     await phone.close();

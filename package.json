@@ -1,7 +1,7 @@
 {
   "name": "terminalone",
   "version": "1.0.0",
-  "description": "A browser-based terminal emulator — your shell, in your browser, with 38 feature modules and PWA install. Free. No subscription. No catch.",
+  "description": "A browser-based terminal emulator — your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
   "license": "MIT",
   "repository": "github:CaptainPhantasy/TerminalOne",
   "homepage": "https://github.com/CaptainPhantasy/TerminalOne#readme",
@@ -11,11 +11,12 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "node tests/input-guard.test.mjs && node tests/smoke-test.js && node tests/feature-test.js && node tests/feature-behavior-test.js && node tests/responsive-test.js",
+    "test": "node tests/input-guard.test.mjs && node tests/smoke-test.js && node tests/feature-test.js && node tests/feature-behavior-test.js && node tests/voice-input.test.js && node tests/responsive-test.js",
     "test:unit": "node tests/input-guard.test.mjs",
     "test:smoke": "node tests/smoke-test.js",
     "test:features": "node tests/feature-test.js",
     "test:behavior": "node tests/feature-behavior-test.js",
+    "test:voice": "node tests/voice-input.test.js",
     "test:responsive": "node tests/responsive-test.js"
   },
   "dependencies": {

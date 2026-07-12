@@ -134,7 +134,7 @@ async function run() {
     });
     assert(iInfo.device === 'iphone', `iPhone UA detected as "${iInfo.device}"`);
     assert(iInfo.display === 'flex', `iPhone key bar visible (display=${iInfo.display})`);
-    assert(iInfo.keyCount === 12, `iPhone key bar has 12 keys (got ${iInfo.keyCount})`);
+    assert(iInfo.keyCount >= 12, `iPhone key bar has at least 12 keys (got ${iInfo.keyCount})`);
     assert(iInfo.labels.includes('ENTER'), 'iPhone bar includes ENTER');
     assert(iInfo.labels.includes('ESC'), 'iPhone bar includes ESC');
     assert(iInfo.labels.includes('CTRL'), 'iPhone bar includes CTRL');

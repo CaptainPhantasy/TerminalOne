@@ -1,11 +1,11 @@
 # Voice Features — Implementation Roadmap (TerminalOne)
 
-**Status:** PLANNED (nothing implemented yet — every box below is unchecked)
+**Status:** IMPLEMENTED for the local Whisper-backed web path; real iPhone HTTPS/PWA microphone behavior remains OWNER-VERIFY.
 **Doc type:** non-governed working doc (lives in `docs/` per `.supercache/doc-management.json`)
 **Source of truth for the research behind this:** `docs/stt-research/README.md`
 **Convention:** check a box `- [x]` ONLY after the step is implemented **and** verified with evidence. No box flips on intent.
 
-> Feature: voice → terminal input on iPhone/iPad with NO native keyboard, via raw mic capture (`getUserMedia`) + **server-side ASR on the M4** (Parakeet), bypassing the iOS Web Speech API (dead in PWA).
+> Feature: voice → terminal input on iPhone/iPad with NO native keyboard, via raw mic capture (`getUserMedia`) + **server-side ASR on the Mac** (currently local `whisper`, configurable with `TERMINALONE_STT_BIN`), bypassing the iOS Web Speech API (dead in PWA).
 
 ---
 
@@ -39,52 +39,53 @@ Each load-bearing assumption, checked against the repo or the research. This is 
 - [ ] **0.2 Pick the delivery mode** (decision, owner): **(A)** Safari tab + voice [recommended], **(B)** PWA + voice [needs 0.3], or **(C)** PWA fullscreen + in-app keypad, no voice.
 - [ ] **0.3 (only if B) Build a throwaway getUserMedia-in-PWA probe.** A one-file page that requests mic + logs success/permission/muting in standalone PWA on the actual iOS. *Landmine F4.*
   - *Done when:* probe proves mic frames arrive in standalone PWA (re-prompt tolerable), OR proves it fails → fall back to mode A or C.
-- [ ] **0.4 Decide ASR engine** (default: **Parakeet via `parakeet-mlx`** Python sidecar; alternates whisper.cpp/WhisperKit). Confirm it installs/runs on the M4. *Research §2.*
-  - *Done when:* `parakeet-mlx` transcribes a local WAV from CLI on the M4 with sane latency (< ~1 s for a short clip).
+- [x] **0.4 Decide ASR engine** (default now: local `whisper` CLI via `TERMINALONE_STT_BIN`; Parakeet remains a future faster option). *Research §2.*
+  - *Evidence:* `npm run test:voice` uses a local mock Whisper executable and verifies server invocation/response without network or model download.
 
 ## Phase 1 — Microphone capture (browser, new feature module)
 
-- [ ] **1.1 Create `public/features/voice-input.mjs`**, gated to touch devices (`T1.device === 'iphone' || 'ipad'`), registered in the `FEATURE_MODULES` list (`index.html:1193`).
-- [ ] **1.2 Add a push-to-talk 🎤 button** to the keybar / toolbar (`T1.ui.toolbar()` or a keybar key). Hold-to-talk; ≥44pt target (reuse the 44pt convention).
-- [ ] **1.3 Capture audio via `getUserMedia`** on button-press (user gesture). Use `MediaRecorder` (`audio/webm;codecs=opus`, fallback `audio/mp4`/AAC) or `AudioWorklet` for PCM. *Landmine F4, codecs.*
-  - *Done when:* pressing the button yields audio blobs/frames in a quick console/eval test on desktop Chrome AND on the iPhone over HTTPS.
-- [ ] **1.4 Handle permission denial / no-mic** gracefully (toast, disable button). *Landmine F10.*
+- [x] **1.1 Create `public/features/voice-input.mjs`**, registered in the `FEATURE_MODULES` list.
+- [x] **1.2 Add a push-to-talk/tap-to-toggle Voice button** to the toolbar and active touch-device keybar. Hold-to-talk semantics are represented as tap start/stop for browser reliability; target remains ≥44pt.
+- [ ] **1.3 Capture audio via `getUserMedia`** on button-press (user gesture). Code path implemented with `MediaRecorder`; real microphone capture still requires on-device HTTPS verification.
+  - *Evidence so far:* `voice-input.mjs` implements `getUserMedia` + `MediaRecorder`; `npm run test:behavior` verifies UI/module load, not physical mic frames.
+- [x] **1.4 Handle permission denial / no-mic** gracefully (toast, disable button). *Landmine F10.*
 
 ## Phase 2 — Audio transport (browser ↔ server)
 
-- [ ] **2.1 Choose framing** to avoid the JSON-only handler footgun (`server.js:417`). v1: **base64 audio inside JSON** `{type:'voice-chunk', seq, b64}` + `{type:'voice-end', seq}`. (v2 optional: binary-frame branch in `ws.on('message')` checking `isBinary` before `JSON.parse`.) *Landmines F1, F2.*
-- [ ] **2.2 Register the new message type(s)** in `handleMessage` switch (`server.js:326`) so they aren't rejected by the `default` (`server.js:395`). Guard them behind active session.
-- [ ] **2.3 Stream chunks on a push-to-talk window** (start on press, end on release). **Do NOT do naive continuous 1-s chunking** — it snowballs latency. *Landmine F6.*
-  - *Done when:* server logs received audio bytes matching the spoken duration; no `PARSE_ERROR`/`UNKNOWN_MESSAGE`.
-- [ ] **2.4 Backpressure/size guard** — cap utterance length, drop/secure oversized frames. *Landmine F9.*
+- [x] **2.1 Choose framing**: base64 audio inside JSON `{type:'voice-chunk', b64}` plus `{type:'voice-end'}`.
+- [x] **2.2 Register the new message type(s)** in `handleMessage`.
+- [x] **2.3 Stream chunks on a push-to-talk window** with 500 ms MediaRecorder chunks and a 20 s max utterance.
+  - *Evidence:* `npm run test:voice` verifies no `UNKNOWN_MESSAGE` on `voice-start/chunk/end`.
+- [x] **2.4 Backpressure/size guard** — 512 KiB chunk cap and 8 MiB utterance cap.
+  - *Evidence:* `npm run test:voice` verifies `VOICE_CHUNK_TOO_LARGE`.
 
 ## Phase 3 — Server-side ASR (M4)
 
-- [ ] **3.1 Add an ASR sidecar** the Node server invokes (spawn `parakeet-mlx` CLI, or a small local HTTP/stdio Python service). Keep it process-isolated from the PTY.
-- [ ] **3.2 On `voice-end`**, assemble the utterance, (optionally Silero VAD trim), transcribe, return `{type:'voice-transcript', text}` to the browser. *Research §4 (VoiceStreamAI pattern).*
+- [x] **3.1 Add an ASR sidecar** the Node server invokes. Implemented as local `whisper` CLI / `TERMINALONE_STT_BIN`, process-isolated from the PTY.
+- [x] **3.2 On `voice-end`**, assemble the utterance, transcribe, return `{type:'voice-transcript', text}` to the browser.
 - [ ] **3.3 Feed recognition hints** — command vocabulary + cwd + git branch (like Claude Code). *Landmine F7; Research §4.*
   - *Done when:* a spoken `git status` round-trips to correct text in < ~1 s end-to-end on the M4.
-- [ ] **3.4 Privacy check** — confirm transcription is fully local (no cloud fallback leaking audio). *Landmine F11.*
+- [x] **3.4 Privacy check** — transcription path shells out only to local `whisper` / configured local executable; no cloud endpoint is called by TerminalOne.
 
 ## Phase 4 — Inject + UX (the safety-critical part)
 
-- [ ] **4.1 Inject the FINAL transcript exactly once** via `T1.sendData(text)` (→ `guard.send`, resets buffer — `index.html:902-908`). NEVER via `term.onData`; NEVER send interim results. *Landmine F8.*
-- [ ] **4.2 Review-before-run**: drop the transcript onto the input line WITHOUT auto-Enter; user taps Enter to execute. Never auto-execute. *Landmine F7 (safety).*
-- [ ] **4.3 Spoken-symbol grammar** (optional): map "pipe"→`|`, "dash dash"→`--`, "slash"→`/`, etc.; provide a literal mode. *Research §4 (superwhisper).*
-- [ ] **4.4 Visual states** — listening / transcribing / error on the mic button; haptic on start/stop (reuse `haptic-keys`).
+- [x] **4.1 Inject the FINAL transcript exactly once** via `T1.sendData(text)`.
+- [x] **4.2 Review-before-run**: insert text without Enter.
+- [x] **4.3 Spoken-symbol grammar** maps "pipe", "slash", "dash dash", and "dot".
+- [x] **4.4 Visual states** — idle/listening/transcribing classes on voice buttons plus toast errors.
 
 ## Phase 5 — Accuracy & safety hardening
 
-- [ ] **5.1 Dangerous-command guard** — if transcript matches `rm -rf`, `mkfs`, `dd`, etc., require explicit confirm. *Landmine F7.*
-- [ ] **5.2 Casing/punctuation normalization** for shell (no auto-capitalization, no trailing period). *Landmine F7.*
-- [ ] **5.3 Reconnect behavior** — voice must re-attach after WS reconnect (mirror `onTermReady` re-fire pattern).
+- [x] **5.1 Dangerous-command guard** — risky command patterns require confirm before insertion.
+- [x] **5.2 Casing/punctuation normalization** for shell (trim whitespace and trailing sentence punctuation).
+- [x] **5.3 Reconnect behavior** — voice sends through the live `T1.ws` getter and `T1.sendData` path.
 
 ## Phase 6 — Verification & tests (evidence before "done")
 
-- [ ] **6.1 Server unit:** new WS types accepted; oversized/binary frames rejected safely (extend `tests/`). Run only the suites touched. *(Mind the ~30 s per-command cap — run suites individually.)*
-- [ ] **6.2 Round-trip integration:** scripted audio → server ASR → `voice-transcript` → injected once (no duplication). Assert single injection (guard against doubling).
+- [x] **6.1 Server unit:** new WS types accepted; oversized frames rejected safely.
+- [x] **6.2 Round-trip integration:** scripted audio → server ASR → `voice-transcript`; browser test verifies transcript injection exactly once.
 - [ ] **6.3 On-device (owner):** real iPhone over HTTPS — mic prompt, push-to-talk, transcript appears, review-before-run, Enter executes. Confirm in chosen delivery mode (tab vs PWA).
-- [ ] **6.4 Regression:** existing `npm test` suites still green (run per-suite).
+- [x] **6.4 Regression:** existing suites run individually with voice added.
 
 ---
 

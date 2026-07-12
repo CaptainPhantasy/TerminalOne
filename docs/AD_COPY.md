@@ -22,7 +22,7 @@ A terminal emulator is the oldest category of software there is. Older than the 
 
 So naturally, someone put it behind a monthly subscription.
 
-TerminalOne: 38 features. One browser tab. Zero dollars. Because some tools are too basic to rent.
+TerminalOne: 39 features. One browser tab. Zero dollars. Because some tools are too basic to rent.
 
 ---
 
@@ -42,7 +42,7 @@ TerminalOne. Built in a garage in Indiana. Tested by a cat who doesn't know what
 t1
 ```
 
-That's the command. Two characters. Terminal's open. Thirty-eight features. Real PTY. Multi-session. Search. Clipboard bridge. PWA-installable on iPad.
+That's the command. Two characters. Terminal's open. Thirty-nine features. Real PTY. Multi-session. Search. Clipboard bridge. PWA-installable on iPad.
 
 We considered naming it something longer. Then we remembered we're building a terminal, not filing a trademark.
 
@@ -114,7 +114,7 @@ We live in a garage in Brown County, Indiana. We have two cats. We have coffee t
 
 TerminalOne is what happened when those opinions met a code editor at 2:47 AM.
 
-**38 features.** Not "38 features with more behind a paywall." Thirty-eight features, all of them, forever. Multi-session tabs. Regex search. Clipboard bridges for both OSC 52 and OSC 777. Pinch-to-zoom. A configurable key bar that actually configures. Themes that respect system dark mode. Autosave that saves your scrollback so when your browser crashes — and it will, it's a browser — you don't lose the thing you were reading. A status bar that tells you latency, uptime, and shell type because you deserve to know how your own terminal is feeling.
+**39 features.** Not "39 features with more behind a paywall." Thirty-nine features, all of them, forever. Multi-session tabs. Regex search. Clipboard bridges for both OSC 52 and OSC 777. Pinch-to-zoom. A configurable key bar that actually configures. Themes that respect system dark mode. Autosave that saves your scrollback so when your browser crashes — and it will, it's a browser — you don't lose the thing you were reading. A status bar that tells you latency, uptime, and shell type because you deserve to know how your own terminal is feeling.
 
 **One port.** 11001. The server and the WebSocket share it. No cross-origin gymnastics. No "did you open the right port" conversation with yourself at 3 AM.
 
