@@ -543,7 +543,10 @@
   window.addEventListener('message', (event) => {
    if (event.source !== window.parent || event.data?.type !== 'floyd:surface-close'
     || !unifiedParentOriginAllowed(event.origin)) return;
+   const requestId = event.data?.requestId;
+   if (typeof requestId !== 'string' || requestId.length < 1 || requestId.length > 160) return;
    closeConnection();
+   event.source.postMessage({ type: 'floyd:surface-closed', requestId }, event.origin);
   });
 
   function addTerminalResource(disposer) {
