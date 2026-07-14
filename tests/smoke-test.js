@@ -10,6 +10,7 @@
  */
 
 const http = require('http');
+const net = require('net');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -53,10 +54,32 @@ async function waitForHealth(timeoutMs = 20000) {
   }
 }
 
+async function assertTestPortFree() {
+  await new Promise((resolve, reject) => {
+    const socket = net.connect({ host: HOST, port: PORT });
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error(`could not prove TEST_PORT ${PORT} is free`));
+    }, 1000);
+    socket.once('connect', () => {
+      clearTimeout(timeout);
+      socket.destroy();
+      reject(new Error(`TEST_PORT ${PORT} is already occupied; refusing to test another process`));
+    });
+    socket.once('error', (error) => {
+      clearTimeout(timeout);
+      socket.destroy();
+      if (error.code === 'ECONNREFUSED') resolve();
+      else reject(error);
+    });
+  });
+}
+
 async function run() {
   console.log('TerminalOne smoke + functional tests');
   console.log(`Target: ${BASE_URL}\n`);
 
+  await assertTestPortFree();
   const server = spawn('node', [path.join(__dirname, '..', 'src', 'server.js')], {
     env: { ...process.env, PORT: String(PORT), TERMINALONE_ALLOWED_ORIGIN: BASE_URL },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -68,6 +91,7 @@ async function run() {
   let browser = null;
   try {
     await waitForHealth();
+    if (server.exitCode !== null) throw new Error(`copy server exited during startup with ${server.exitCode}`);
 
     // ── HTTP layer ──
     console.log('HTTP:');
