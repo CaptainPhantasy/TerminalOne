@@ -52,6 +52,7 @@ Then we built TerminalOne.
 - **Status bar.** Latency. Uptime. Shell type. Your terminal tells you how it's doing. Emotionally, it's stable.
 - **PWA.** Install it on iPad/iPhone. Runs standalone. No browser chrome. No address bar. Just the terminal and the void.
 - **Always-on.** Optional macOS service. Starts at login. Restarts on crash. `t1` and you're in.
+- **Floyd Core client.** The Floyd action prepares the canonical `floyd` CLI inside the current PTY. It routes through Floyd Core to the managed OpenCode runtime; no provider key enters the browser.
 
 The other 20-ish features are variations on "we thought of one more thing and then did it." Full list in `.feature-manifest.md` if you don't believe us. You shouldn't. Verify everything. We did.
 
@@ -120,7 +121,8 @@ They are not on the payroll. They are the payroll. We work for them. The termina
 - **Load-proofed, not behavior-proofed.** Every feature module loads without errors and renders its UI. The 20 ShellFish-parity features all pass automated tests. But "loads clean" ≠ "every edge case works." OSC 52 clipboard on a specific browser, pinch-zoom on a specific tablet, session switching under load — these need real hands on real devices. If something doesn't work, that's not a typo, that's reality.
 - **It runs on port 11001.** If something else is using that port, one of them has to move. We recommend the other thing.
 - **node-pty is a native module.** It compiles on install. If your system can't compile native modules, TerminalOne can't help you. Neither can we. We're in a garage.
-- **No cloud.** TerminalOne runs on your machine, talks to your shell, and goes nowhere else. There is no TerminalOne server. Your data does not leave your device. There is no data. It's a terminal.
+- **No cloud by default.** Ordinary terminal traffic stays between the browser and this Mac. The optional Floyd action is different: commands submitted with `floyd` go to local Floyd Core, whose managed OpenCode runtime may call its configured model provider. TerminalOne itself stores no provider key.
+- **Remote binding is dangerous.** The default bind is `127.0.0.1`. Setting `HOST=0.0.0.0` exposes a real shell and the Floyd action without an application authentication layer. Use only behind an authenticated private tunnel; a trusted Wi-Fi name is not access control.
 
 ---
 
@@ -155,7 +157,7 @@ Yeah. It was worth it.
 │  Cats on staff:    2 (Bella: QA, Bowser: Infrastructure)  │
 │  Location:         Garage, Brown County, Indiana          │
 │  Built because:    Spite is a valid engineering motivation│
-│  "I Don't Suck":   ✅ PASS                                │
+│  "I Don't Suck":   PASS                                  │
 │  Corporate Feelings: HURT (deeply, structurally intended) │
 └──────────────────────────────────────────────────────────┘
 

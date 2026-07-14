@@ -1,6 +1,6 @@
 # TerminalOne SSOT (Single Source of Truth)
 **Created:** 2026-06-17T14:07:01-04:00
-**Last Updated:** 2026-06-17T14:20:00-04:00
+**Last Updated:** 2026-07-14T00:38:00-04:00
 **Governance:** .supercache/ v1.7.0
 
 > **Compliance Notice:** This file must match the structure at
@@ -46,7 +46,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 
 ## Current State
 
-**Phase:** Active development — terminal infrastructure cloned
+**Phase:** Active development — Floyd Core terminal surface integrated
 **Status:** Active
 **Last Agent Session:** 2026-06-17T14:20:00-04:00
 
@@ -66,6 +66,8 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 - **Single-port HTTP+WS server**: Express and WebSocket share port 11001, avoiding cross-origin and secondary-port issues.
 - **Real PTY via node-pty**: Spawns the user's default shell in a pseudoterminal so interactive programs work in the browser.
 - **Generic terminal surface**: No harness registry, no launcher UI. The project is intentionally a stripped terminal emulator, not harness-launcher.
+- **Floyd Core action**: A trusted WebSocket action installs a PTY-local canonical `floyd` CLI function. Server-side health uses `@floyd/sdk`; provider credentials and the Core gateway token never enter browser state.
+- **Loopback by default**: HTTP and WebSocket bind to `127.0.0.1` unless `HOST` is explicitly overridden. A non-loopback bind exposes an unauthenticated real shell and is a deliberate operator risk.
 
 ---
 
@@ -76,6 +78,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 | 2026-06-17T14:20:00-04:00 | Port 11001 claimed for TerminalOne | Adjacent to harness-launcher (11000) for lineage; avoids forbidden ports 3000/5173 and existing claims. | Agent |
 | 2026-06-17T14:20:00-04:00 | Clone only terminal part of harness-launcher | User instruction: clone terminal part, not harnesses or launcher. | Douglas |
 | 2026-06-19T00:00:00-04:00 | Responsive layout: dvh/dvw + safe-area on .app-shell | iPad/tablet viewport overflow caused by double-counted safe-area insets (body padding + 100vh). Fixed by moving insets to the element that owns height. | Douglas/Agent |
+| 2026-07-14T00:38:00-04:00 | Floyd Core is the sole model authority | TerminalOne requests a logical Floyd action; only the server constructs the canonical CLI command, and only Floyd Core owns OpenCode/provider state. | Douglas/Agent |
 <!-- Decisions are append-only. When a decision is superseded, add a new row with the -->
 <!-- superseding decision and link back to the old one. Never edit historical rows. -->
 
@@ -116,6 +119,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 | 2026-06-17T14:20:00-04:00 | Current State / Architecture Facts | Project is now a Node.js CommonJS terminal emulator using Express+ws+node-pty+xterm.js on port 11001 | `/Volumes/SanDisk1Tb/TerminalOne/FLOYD.md`, `/Volumes/SanDisk1Tb/SSOT/port-registry.json` | 100% |
 | 2026-06-17T14:20:00-04:00 | Key Decisions | Port 11001 claimed and terminal part cloned without harness/launcher code | `/Volumes/SanDisk1Tb/SSOT/port-registry.json`, agent edits | 100% |
 | 2026-06-19T00:00:00-04:00 | Architecture Facts / Responsive layout | App shell no longer overflows the viewport on any iPad size; uses dvh/dvw (vh/vw fallback) with safe-area insets on .app-shell (border-box). Verified across 10 tablet viewports incl. iPad A16 11th-gen (820×1180) portrait/landscape/Split View via tests/responsive-test.js (puppeteer): scrollH/W ≤ vh/vw, key bar + footer within viewport, terminal contained. | tests/responsive-test.js (npm test), public/index.html:23-63,146-152 | 100% |
+| 2026-07-14T00:38:00-04:00 | Floyd Core integration | SDK health 200, exact 401 echo, client abort closes upstream, PTY Floyd action reaches fake and live Core, built-in randomUUID, loopback bind, no browser key controls or rendered emoji | `npm test` exit 0; both npm audits exit 0; installed-Chrome proof | 100% |
 
 ---
 
@@ -124,6 +128,7 @@ This pattern is deliberate — it reinforces evidence-first thinking and makes t
 - 2026-06-17T14:07:01-04:00 — Initialized SSOT.
 - 2026-06-17T14:20:00-04:00 — Cloned terminal part from harness-launcher; claimed port 11001; updated FLOYD.md and SSOT architecture facts.
 - 2026-06-19T00:00:00-04:00 — Fixed iPad/tablet viewport overflow (app exceeded viewport). Root cause: double-counted safe-area insets (body padding + 100vh on .app-shell under viewport-fit=cover). Moved insets onto .app-shell (border-box), switched to 100dvh/dvw with vh/vw fallback, removed redundant keybar bottom inset, hardened #terminal overflow, added tablet/Split-View/landscape-with-keyboard media queries. Added tests/responsive-test.js (10 viewports incl. iPad A16 11th-gen); wired into npm test. Full suite green.
+- 2026-07-14T00:38:00-04:00 — Added the canonical Floyd Core SDK/CLI bridge, exact health-error propagation, abort cleanup, Floyd terminal action, loopback default bind, built-in randomUUID, dependency hardening, and emoji-free Floyd controls.
 
 <!-- Append new entries BELOW this comment line, in chronological order. -->
 <!-- Never edit or remove existing entries — this is the authoritative change history. -->
