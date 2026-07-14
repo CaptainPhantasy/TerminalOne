@@ -408,6 +408,7 @@
   const integratedFloydContinue = integratedFloydMarker === 'continue';
   const integratedFloydEmbedded = integratedFloydMarker === 'integrated';
   let integratedFloydContext = null;
+  let terminalReadyForFloyd = false;
   let integratedFloydStarted = false;
   if (launchQuery.has('floyd')) {
    launchQuery.delete('floyd');
@@ -554,6 +555,7 @@
     const validId = (value) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value);
     if (context && validId(context.projectId) && validId(context.sessionId) && validId(context.runId)) {
      integratedFloydContext = { projectId: context.projectId, sessionId: context.sessionId, runId: context.runId };
+     maybeLaunchIntegratedFloyd();
     }
     return;
    }
@@ -1034,10 +1036,8 @@
       setFooter(`${msg.command} · ${msg.cwd}`);
      }
      setSessionInfo(`session ${msg.sessionId.slice(0, 8)}`);
-     if (integratedFloydContinue && !integratedFloydStarted && !msg.resumed) {
-      integratedFloydStarted = true;
-      queueMicrotask(launchFloyd);
-     }
+     terminalReadyForFloyd = !msg.resumed;
+     maybeLaunchIntegratedFloyd();
      break;
     }
     case 'output': {
@@ -1209,6 +1209,14 @@
     return;
    }
    ws.send(JSON.stringify({ type: 'floyd', ...(integratedFloydContext ? { context: integratedFloydContext } : {}) }));
+  }
+
+  function maybeLaunchIntegratedFloyd() {
+   const remoteContextRequired = launchQuery.has('floyd_parent');
+   if (!integratedFloydContinue || integratedFloydStarted || !terminalReadyForFloyd
+    || (remoteContextRequired && !integratedFloydContext)) return;
+   integratedFloydStarted = true;
+   queueMicrotask(launchFloyd);
   }
 
   // ── Settings UI ─────────────────────────────────────────────────────────────
