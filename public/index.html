@@ -404,7 +404,9 @@
   // authoritative project/session/run/event tuple and removes the marker from
   // browser history before opening its WebSocket.
   const launchQuery = new URLSearchParams(location.search);
-  const integratedFloydContinue = launchQuery.get('floyd') === 'continue';
+  const integratedFloydMarker = launchQuery.get('floyd');
+  const integratedFloydContinue = integratedFloydMarker === 'continue';
+  const integratedFloydEmbedded = integratedFloydMarker === 'integrated';
   let integratedFloydStarted = false;
   if (launchQuery.has('floyd')) {
    launchQuery.delete('floyd');
@@ -1408,6 +1410,7 @@
    },
    savedSession: () => lsGet(LS_SESSION, null),
    integratedContinueRequested: () => integratedFloydContinue,
+   integratedWorkspaceRequested: () => integratedFloydEmbedded,
    launchFloyd
   };
  </script>
@@ -1415,7 +1418,7 @@
   /* PWA: register the offline shell service worker. Guarded — failure never breaks the app. */
   if ('serviceWorker' in navigator) {
    window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch((e) => {
+    navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' }).catch((e) => {
      console.warn('TerminalOne SW registration failed:', e);
     });
    });

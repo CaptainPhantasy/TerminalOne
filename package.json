@@ -11,9 +11,10 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "node tests/input-guard.test.mjs && node tests/floyd-core-test.js && node tests/smoke-test.js && node tests/feature-test.js && node tests/feature-behavior-test.js && node tests/responsive-test.js",
+    "test": "node tests/input-guard.test.mjs && node tests/service-worker-test.js && node tests/floyd-core-test.js && node tests/smoke-test.js && node tests/feature-test.js && node tests/feature-behavior-test.js && node tests/responsive-test.js",
     "test:floyd": "node tests/floyd-core-test.js",
     "test:unit": "node tests/input-guard.test.mjs",
+    "test:service-worker": "node tests/service-worker-test.js",
     "test:smoke": "node tests/smoke-test.js",
     "test:features": "node tests/feature-test.js",
     "test:behavior": "node tests/feature-behavior-test.js",

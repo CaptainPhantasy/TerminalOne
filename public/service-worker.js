@@ -1,5 +1,5 @@
 /* TerminalOne service worker — offline shell only. */
-const CACHE_NAME = 'terminalone-shell-v1';
+const CACHE_NAME = 'terminalone-shell-v2';
 const OFFLINE_ASSETS = [
   '/',
   '/index.html',
@@ -25,9 +25,43 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request).catch(() => caches.match('/index.html'));
-    })
-  );
+  const url = new URL(event.request.url);
+  const networkOnlyRequest = url.origin === self.location.origin
+    && (url.pathname.startsWith('/api/') || url.pathname.startsWith('/admin/') || url.pathname === '/health');
+  const appShellRequest = event.request.mode === 'navigate'
+    || (url.origin === self.location.origin && ['/', '/index.html'].includes(url.pathname));
+
+  // Never clone or cache live application traffic. In particular, cache.put()
+  // cannot complete for an open SSE body; retaining those clones eventually
+  // exhausts the browser's per-origin connection pool.
+  if (networkOnlyRequest) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (appShellRequest) {
+    event.respondWith((async () => {
+      try {
+        // Release the current shell directly to the browser. The versioned
+        // install cache already provides the offline fallback, so navigation
+        // never needs to wait on a second Cache Storage write.
+        return await fetch(event.request, { cache: 'no-store' });
+      } catch (_) {
+        return (await caches.match(event.request)) || caches.match('/index.html');
+      }
+    })());
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cached = await caches.match(event.request);
+    if (cached) return cached;
+    const response = await fetch(event.request);
+    const contentType = response.headers.get('content-type') || '';
+    if (response.ok && url.origin === self.location.origin && !contentType.includes('text/event-stream')) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(event.request, response.clone());
+    }
+    return response;
+  })());
 });
