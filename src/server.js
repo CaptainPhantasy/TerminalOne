@@ -16,8 +16,10 @@ const {
   negotiateFloydExperience,
   publishFloydPresence,
   requireLoopback,
+  resolveFloydLaunchContext,
   streamFloydExperience
 } = require('./floyd-core');
+const { installWebSocketAuth } = require('./ws-auth');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -380,16 +382,23 @@ function handleMessage(session, ws, data) {
         wsError(ws, 'NO_ACTIVE_SHELL', 'Start or resume a shell before launching Floyd', session.id);
         break;
       }
-      try {
-        // The command is built exclusively from trusted server configuration.
-        // Browser input cannot inject a path, token, provider, or model route.
-        session.ptyProcess.write(buildFloydShellCommand() + '\r');
+      if (session.floydLaunchPending) break;
+      session.floydLaunchPending = true;
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      ws.once('close', abort);
+      void resolveFloydLaunchContext(controller.signal).then((context) => {
+        if (controller.signal.aborted || session.ws !== ws || !session.ptyProcess || session.processExited) return;
+        session.ptyProcess.write(buildFloydShellCommand(context) + '\r');
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'floyd-ready', sessionId: session.id }));
+          ws.send(JSON.stringify({ type: 'floyd-ready', sessionId: session.id, projectId: context.projectId }));
         }
-      } catch (e) {
-        wsError(ws, 'FLOYD_LAUNCH_FAILED', `Could not prepare Floyd Core CLI: ${e.message}`, session.id);
-      }
+      }).catch((e) => {
+        if (!controller.signal.aborted) wsError(ws, 'FLOYD_LAUNCH_FAILED', `Could not prepare Floyd Core CLI: ${e.message}`, session.id);
+      }).finally(() => {
+        ws.off('close', abort);
+        session.floydLaunchPending = false;
+      });
       break;
     }
     case 'resize': {
@@ -533,7 +542,9 @@ app.post('/admin/sessions/:id/kill', (req, res) => {
 // ─── HTTP + WebSocket server ────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ noServer: true });
+const ALLOWED_ORIGIN = process.env.TERMINALONE_ALLOWED_ORIGIN || `http://${HOST}:${PORT}`;
+installWebSocketAuth({ app, server, wss, allowedOrigin: ALLOWED_ORIGIN });
 
 // Bind failures used to surface as an unhandled WebSocketServer exception.
 // Keep the failure explicit and structured without pretending the app started.

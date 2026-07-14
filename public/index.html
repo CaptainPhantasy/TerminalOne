@@ -1035,8 +1035,21 @@
    term?.write(`\r\n\x1b[33m[resume unavailable — starting fresh shell]\x1b[0m\r\n`);
   }
 
-  function connect() {
-   if (ws && ws.readyState === WebSocket.OPEN) return;
+  async function openAuthenticatedWebSocket() {
+   const response = await fetch('/api/ws-ticket', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
+   });
+   const payload = await response.json().catch(() => ({}));
+   if (!response.ok) throw new Error(payload.error || `Terminal authorization failed (${response.status})`);
+   if (!payload.ticket) throw new Error('Terminal authorization returned no ticket');
+   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+   return new WebSocket(`${protocol}//${location.host}/ws?ticket=${encodeURIComponent(payload.ticket)}`);
+  }
+
+  async function connect() {
+   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
    if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -1053,8 +1066,13 @@
    updateStatus('Connecting…', 'connecting');
    hideBanner();
 
-   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-   ws = new WebSocket(`${protocol}//${location.host}`);
+   try {
+    ws = await openAuthenticatedWebSocket();
+   } catch (error) {
+    showBanner(error.message || String(error), 'error');
+    updateStatus('Authorization failed', 'error');
+    return;
+   }
 
    ws.onopen = () => {
     reconnectAttempts = 0;

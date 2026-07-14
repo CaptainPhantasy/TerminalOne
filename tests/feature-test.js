@@ -17,7 +17,7 @@
 const http = require('http');
 const path = require('path');
 const { spawn } = require('child_process');
-const WebSocket = require('ws');
+const { createTestWebSocket } = require('./ws-test-client');
 
 const PORT = process.env.TEST_PORT || 11002;
 const HOST = 'localhost';
@@ -53,8 +53,8 @@ async function waitForHealth(timeoutMs = 20000) {
 }
 
 /** Open a raw WS and send `msg`, resolving with the first server message. */
-function openWs() {
-  const ws = new WebSocket(`ws://${HOST}:${PORT}`);
+async function openWs() {
+  const ws = await createTestWebSocket(PORT, HOST);
   return new Promise((resolve, reject) => {
     ws.on('open', () => resolve(ws));
     ws.on('error', reject);
@@ -83,7 +83,7 @@ async function run() {
   console.log(`Target: ${BASE_URL}\n`);
 
   const server = spawn('node', [path.join(__dirname, '..', 'src', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), TERMINALONE_ALLOWED_ORIGIN: BASE_URL },
     stdio: ['ignore', 'pipe', 'pipe']
   });
   let serverLog = '';

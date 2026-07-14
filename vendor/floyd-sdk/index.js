@@ -51,6 +51,10 @@ class FloydClient {
     return this.request('GET', '/api/health', undefined, signal);
   }
 
+  state(signal) {
+    return this.request('GET', '/api/state', undefined, signal);
+  }
+
   negotiateExperience(input, signal) {
     return this.request('POST', '/api/experience/negotiate', {
       surface_id: input.surface_id,

@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
 const { buildFloydShellCommand, requireLoopback } = require('../src/floyd-core');
+const { allowedOrigin, createTestWebSocket, requestTicket } = require('./ws-test-client');
 
 const TOKEN = 'test-gateway-token';
 
@@ -21,6 +22,27 @@ function listen(server) {
 
 function close(server) {
   return new Promise((resolve) => server.close(resolve));
+}
+
+function expectUpgradeRejected(url, options, expectedStatus) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, options);
+    socket.once('unexpected-response', (_request, response) => {
+      response.resume();
+      if (response.statusCode === expectedStatus) resolve();
+      else reject(new Error(`expected WebSocket HTTP ${expectedStatus}, received ${response.statusCode}`));
+    });
+    socket.once('open', () => reject(new Error(`WebSocket unexpectedly opened; expected HTTP ${expectedStatus}`)));
+    socket.once('error', () => {});
+  });
+}
+
+function openWebSocket(url, origin) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url, { headers: { Origin: origin } });
+    socket.once('open', () => resolve(socket));
+    socket.once('error', reject);
+  });
 }
 
 function get(port, pathname) {
@@ -87,6 +109,7 @@ async function run() {
   let revision = 3;
   let lastPresencePatch = null;
   let coreRequests = 0;
+  let projectRoot;
   const experience = () => ({
     id: 'primary', schema_version: '1.0.0', revision,
     active: { project_id: 'project-1', session_id: 'session-1', run_id: 'run-1' },
@@ -127,6 +150,17 @@ async function run() {
       response.end(JSON.stringify(experience()));
       return;
     }
+    if (request.method === 'GET' && request.url === '/api/state') {
+      const stateProjectId = mode === 'wrong-project' ? 'project-2' : 'project-1';
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({
+        projects: [{ id: stateProjectId, name: 'test', root_path: projectRoot }],
+        sessions: [{ id: 'session-1', project_id: stateProjectId }],
+        runs: [{ id: 'run-1', project_id: stateProjectId, session_id: 'session-1' }],
+        jobs: [], leases: [], provider_profiles: [], experience: experience()
+      }));
+      return;
+    }
     if (request.method === 'PATCH' && request.url === '/api/experience/primary') {
       lastPresencePatch = await readJson(request);
       if (lastPresencePatch.expected_revision !== revision) {
@@ -153,18 +187,21 @@ async function run() {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminalone-floyd-test-'));
   fs.mkdirSync(path.join(runtimeRoot, 'core'));
   fs.writeFileSync(path.join(runtimeRoot, 'core', 'gateway.token'), TOKEN, { mode: 0o600 });
+  projectRoot = path.join(runtimeRoot, 'active project');
+  fs.mkdirSync(projectRoot);
   const tuiBin = path.join(runtimeRoot, 'fake-omp');
-  fs.writeFileSync(tuiBin, '#!/bin/sh\nprintf "FLOYD_TUI_LAUNCHED:%s\\n" "$*"\n', { mode: 0o700 });
+  fs.writeFileSync(tuiBin, '#!/bin/sh\nprintf "FLOYD_TUI_CWD:%s\\n" "$PWD"\nprintf "FLOYD_TUI_LAUNCHED:%s\\n" "$*"\n', { mode: 0o700 });
   delete process.env.FLOYD_TUI_BIN;
-  const defaultLaunchCommand = buildFloydShellCommand();
-  assert.match(defaultLaunchCommand, /\/Volumes\/Storage\/FLOYD_RUNTIME\/bin\/floyd-tui.*floyd --continue/);
+  const defaultLaunchCommand = buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot });
+  assert.match(defaultLaunchCommand, /cd -- .*active project.*\/Volumes\/Storage\/FLOYD_RUNTIME\/bin\/floyd-tui.*floyd --project-id 'project-1' --continue/);
   assert.doesNotMatch(defaultLaunchCommand, /(^|[ ;])omp([ ;]|$)/, 'default launch never resolves omp from PATH');
   process.env.FLOYD_TUI_BIN = 'relative-omp';
-  assert.throws(() => buildFloydShellCommand(), /must be an absolute path/);
+  assert.throws(() => buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot }), /must be an absolute path/);
   process.env.FLOYD_TUI_BIN = tuiBin;
-  const launchCommand = buildFloydShellCommand();
-  assert.match(launchCommand, /fake-omp.*floyd --continue/);
+  const launchCommand = buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot });
+  assert.match(launchCommand, /fake-omp.*floyd --project-id 'project-1' --continue/);
   assert.doesNotMatch(launchCommand, /(^|[ ;])omp([ ;]|$)/, 'launch never falls through to a PATH-resolved omp');
+  assert.throws(() => buildFloydShellCommand({ projectId: "project-1'; touch /tmp/owned", rootPath: projectRoot }), /invalid Floyd project ID/);
 
   let loopbackNext = false;
   let deniedStatus = null;
@@ -191,7 +228,8 @@ async function run() {
       FLOYD_CORE_PORT: String(corePort),
       FLOYD_RUNTIME_ROOT: runtimeRoot,
       FLOYD_WORKSTATION_ROOT: '/Volumes/Storage/FLOYD_WORKSTATION',
-      FLOYD_TUI_BIN: tuiBin
+      FLOYD_TUI_BIN: tuiBin,
+      TERMINALONE_ALLOWED_ORIGIN: `http://127.0.0.1:${surfacePort}`
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -201,6 +239,19 @@ async function run() {
 
   try {
     await waitForSurface(surfacePort);
+    const origin = allowedOrigin(surfacePort);
+    const wsBase = `ws://127.0.0.1:${surfacePort}/ws`;
+    await assert.rejects(() => requestTicket(surfacePort, 'https://hostile.example'), /ticket request failed \(403\)/);
+    await expectUpgradeRejected(wsBase, undefined, 403);
+    await expectUpgradeRejected(wsBase, { headers: { Origin: origin } }, 401);
+    const singleUseTicket = await requestTicket(surfacePort, origin);
+    const ticketUrl = `${wsBase}?ticket=${encodeURIComponent(singleUseTicket)}`;
+    await expectUpgradeRejected(ticketUrl, { headers: { Origin: 'https://hostile.example' } }, 403);
+    const admitted = await openWebSocket(ticketUrl, origin);
+    admitted.close();
+    await new Promise((resolve) => admitted.once('close', resolve));
+    await expectUpgradeRejected(ticketUrl, { headers: { Origin: origin } }, 401);
+
     const health = await get(surfacePort, '/api/floyd/health');
     assert.equal(health.status, 200);
     assert.deepEqual(JSON.parse(health.body), { status: 'ok', engine: { healthy: true, name: 'fake-opencode' } });
@@ -263,37 +314,66 @@ async function run() {
     assert.equal(upstreamClosed, true, 'client disconnect aborts the Core request');
     mode = 'ok';
 
+    mode = 'wrong-project';
     await new Promise((resolve, reject) => {
-      const socket = new WebSocket(`ws://127.0.0.1:${surfacePort}`);
+      let socket;
+      const timer = setTimeout(() => reject(new Error('wrong-project launch did not fail closed')), 15_000);
+      createTestWebSocket(surfacePort).then((created) => {
+        socket = created;
+        socket.on('open', () => socket.send(JSON.stringify({ type: 'shell', cols: 100, rows: 30 })));
+        socket.on('message', (raw) => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === 'ready') socket.send(JSON.stringify({ type: 'floyd' }));
+          if (message.type === 'floyd-ready') reject(new Error('wrong-project launch was acknowledged'));
+          if (message.type === 'error' && message.code === 'FLOYD_LAUNCH_FAILED') {
+            clearTimeout(timer);
+            assert.match(message.message, /project is absent from Core state/);
+            socket.send(JSON.stringify({ type: 'close' }));
+            socket.close();
+            resolve();
+          }
+        });
+        socket.on('error', reject);
+      }).catch(reject);
+    });
+
+    mode = 'ok';
+    await new Promise((resolve, reject) => {
+      let socket;
       let ready = false;
       let acknowledged = false;
       let output = '';
       const timer = setTimeout(() => reject(new Error(`TerminalOne Floyd PTY timed out: ${output}`)), 15_000);
-      socket.on('open', () => socket.send(JSON.stringify({ type: 'shell', cols: 100, rows: 30 })));
-      socket.on('message', (raw) => {
-        const message = JSON.parse(raw.toString());
-        if (message.type === 'ready' && !ready) {
-          ready = true;
-          socket.send(JSON.stringify({ type: 'floyd' }));
-        } else if (message.type === 'floyd-ready') {
-          acknowledged = true;
-        } else if (message.type === 'output') {
-          output += message.data;
-        } else if (message.type === 'error') {
-          clearTimeout(timer);
-          reject(new Error(`${message.code}: ${message.message}`));
-        }
-        if (acknowledged && output.includes('FLOYD_TUI_LAUNCHED:floyd --continue')) {
-          clearTimeout(timer);
-          socket.send(JSON.stringify({ type: 'close' }));
-          socket.close();
-          resolve();
-        }
-      });
-      socket.on('error', reject);
+      createTestWebSocket(surfacePort).then((created) => {
+        socket = created;
+        socket.on('open', () => socket.send(JSON.stringify({ type: 'shell', cols: 100, rows: 30 })));
+        socket.on('message', (raw) => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === 'ready' && !ready) {
+            ready = true;
+            socket.send(JSON.stringify({ type: 'floyd' }));
+          } else if (message.type === 'floyd-ready') {
+            acknowledged = message.projectId === 'project-1';
+          } else if (message.type === 'output') {
+            output += message.data;
+          } else if (message.type === 'error') {
+            clearTimeout(timer);
+            reject(new Error(`${message.code}: ${message.message}`));
+          }
+          if (acknowledged
+            && output.includes(`FLOYD_TUI_CWD:${projectRoot}`)
+            && output.includes('FLOYD_TUI_LAUNCHED:floyd --project-id project-1 --continue')) {
+            clearTimeout(timer);
+            socket.send(JSON.stringify({ type: 'close' }));
+            socket.close();
+            resolve();
+          }
+        });
+        socket.on('error', reject);
+      }).catch(reject);
     });
 
-    console.log('PASS TerminalOne Floyd Experience presence, stream abort, exact errors, and semantic TUI launch');
+    console.log('PASS TerminalOne ticket gate, project-bound Floyd continuation, wrong-project rejection, stream abort, and exact errors');
   } finally {
     child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));

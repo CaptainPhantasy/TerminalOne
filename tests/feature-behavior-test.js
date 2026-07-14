@@ -65,7 +65,7 @@ async function run() {
   console.log(`Target: ${BASE_URL}\n`);
 
   server = spawn('node', [path.join(__dirname, '..', 'src', 'server.js')], {
-    env: { ...process.env, PORT: String(PORT) },
+    env: { ...process.env, PORT: String(PORT), TERMINALONE_ALLOWED_ORIGIN: BASE_URL },
     stdio: 'ignore',
   });
 

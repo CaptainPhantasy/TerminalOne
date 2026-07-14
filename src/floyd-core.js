@@ -26,9 +26,44 @@ function admittedTuiBin() {
   return candidate;
 }
 
-/** Launch the semantic TUI without accepting executable input from the browser. */
-function buildFloydShellCommand() {
-  return `${shellQuote(admittedTuiBin())} floyd --continue`;
+function trustedId(value, label) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value)) {
+    throw new Error(`invalid Floyd ${label}`);
+  }
+  return value;
+}
+
+function trustedProjectRoot(value) {
+  if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error('Floyd project root must be absolute');
+  const resolved = fs.realpathSync(value);
+  if (!fs.statSync(resolved).isDirectory()) throw new Error(`Floyd project root is not a directory: ${resolved}`);
+  return resolved;
+}
+
+/** Resolve one referentially consistent active continuation entirely from Core-owned state. */
+async function resolveFloydLaunchContext(signal) {
+  const core = client();
+  const envelope = await core.experience('primary', signal);
+  const projectId = trustedId(envelope.active?.project_id, 'project ID');
+  const sessionId = trustedId(envelope.active?.session_id, 'session ID');
+  const runId = trustedId(envelope.active?.run_id, 'run ID');
+  const state = await core.state(signal);
+  const project = state.projects?.find((candidate) => candidate.id === projectId);
+  const session = state.sessions?.find((candidate) => candidate.id === sessionId);
+  const run = state.runs?.find((candidate) => candidate.id === runId);
+  if (!project) throw new Error(`active Floyd project is absent from Core state: ${projectId}`);
+  if (!session || session.project_id !== projectId) throw new Error('active Floyd session does not belong to the restored project');
+  if (!run || run.project_id !== projectId || run.session_id !== sessionId) {
+    throw new Error('active Floyd run does not belong to the restored project and session');
+  }
+  return { projectId, sessionId, runId, rootPath: trustedProjectRoot(project.root_path) };
+}
+
+/** Launch the admitted semantic TUI in the Core-resolved project; browser input supplies no command data. */
+function buildFloydShellCommand(context) {
+  const projectId = trustedId(context?.projectId, 'project ID');
+  const rootPath = trustedProjectRoot(context?.rootPath);
+  return `cd -- ${shellQuote(rootPath)} && ${shellQuote(admittedTuiBin())} floyd --project-id ${shellQuote(projectId)} --continue`;
 }
 
 function sendPayload(res, status, payload) {
@@ -227,5 +262,6 @@ module.exports = {
   negotiateFloydExperience,
   publishFloydPresence,
   requireLoopback,
+  resolveFloydLaunchContext,
   streamFloydExperience
 };
