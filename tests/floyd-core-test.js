@@ -8,6 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const WebSocket = require('ws');
+const { buildFloydShellCommand, requireLoopback } = require('../src/floyd-core');
 
 const TOKEN = 'test-gateway-token';
 
@@ -34,6 +35,38 @@ function get(port, pathname) {
   });
 }
 
+function post(port, pathname, body) {
+  return new Promise((resolve, reject) => {
+    const encoded = body === undefined ? '' : JSON.stringify(body);
+    const request = http.request({
+      hostname: '127.0.0.1',
+      port,
+      path: pathname,
+      method: 'POST',
+      headers: encoded ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(encoded) } : {}
+    }, (response) => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { responseBody += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body: responseBody }));
+    });
+    request.once('error', reject);
+    request.end(encoded);
+  });
+}
+
+function readJson(request) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    request.setEncoding('utf8');
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      try { resolve(body ? JSON.parse(body) : {}); } catch (error) { reject(error); }
+    });
+    request.on('error', reject);
+  });
+}
+
 async function waitForSurface(port) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
@@ -50,27 +83,100 @@ async function run() {
   let delayedStarted;
   let resolveDelayedStarted;
   let upstreamClosed = false;
-  const fakeCore = http.createServer((request, response) => {
+  let experienceStreamClosed = false;
+  let revision = 3;
+  let lastPresencePatch = null;
+  let coreRequests = 0;
+  const experience = () => ({
+    id: 'primary', schema_version: '1.0.0', revision,
+    active: { project_id: 'project-1', session_id: 'session-1', run_id: 'run-1' },
+    model_route: { provider: null, model: null, base_url: null, provider_profile_id: null, credential_ref: null },
+    transcript_cursor: 21, transcript_epoch: 'epoch-1', last_event_id: '21',
+    pending_questions: [], pending_permissions: [], composer_draft: '',
+    selected_artifact_id: null, selected_view: 'tui:run', surfaces: {},
+    updated_at: '2026-07-14T00:00:00.000Z', updated_by_device_id: null
+  });
+  const fakeCore = http.createServer(async (request, response) => {
+    coreRequests += 1;
     assert.equal(request.headers.authorization, `Bearer ${TOKEN}`);
-    assert.equal(request.url, '/api/health');
     if (mode === 'unauthorized') {
       response.writeHead(401, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ error: { type: 'auth', message: 'exact upstream auth failure' } }));
       return;
     }
-    if (mode === 'delay') {
+    if (mode === 'delay' && request.url === '/api/health') {
       response.on('close', () => { upstreamClosed = true; });
       resolveDelayedStarted();
       return;
     }
-    response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ status: 'ok', engine: { healthy: true, name: 'fake-opencode' } }));
+    if (request.url === '/api/health') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ status: 'ok', engine: { healthy: true, name: 'fake-opencode' } }));
+      return;
+    }
+    if (request.method === 'POST' && request.url === '/api/experience/negotiate') {
+      const body = await readJson(request);
+      assert.equal(body.surface_id, 'pty');
+      assert.deepEqual(body.capabilities, ['terminal-transport', 'experience-read', 'floyd-launch']);
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ accepted: true, envelope_version: '1.0.0', core_protocol_version: '1.0.0', minimum_sdk_version: '1.0.0' }));
+      return;
+    }
+    if (request.method === 'GET' && request.url === '/api/experience/primary') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(experience()));
+      return;
+    }
+    if (request.method === 'PATCH' && request.url === '/api/experience/primary') {
+      lastPresencePatch = await readJson(request);
+      if (lastPresencePatch.expected_revision !== revision) {
+        response.writeHead(409, { 'content-type': 'application/json' });
+        response.end(JSON.stringify({ error: 'revision_conflict', envelope: experience() }));
+        return;
+      }
+      revision += 1;
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(experience()));
+      return;
+    }
+    if (request.method === 'GET' && request.url === '/api/experience/primary/stream') {
+      response.on('close', () => { experienceStreamClosed = true; });
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.write(`id: ${revision}\nevent: experience\ndata: ${JSON.stringify(experience())}\n\n`);
+      return;
+    }
+    response.writeHead(404, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: 'not_found' }));
   });
   const corePort = await listen(fakeCore);
 
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'terminalone-floyd-test-'));
   fs.mkdirSync(path.join(runtimeRoot, 'core'));
   fs.writeFileSync(path.join(runtimeRoot, 'core', 'gateway.token'), TOKEN, { mode: 0o600 });
+  const tuiBin = path.join(runtimeRoot, 'fake-omp');
+  fs.writeFileSync(tuiBin, '#!/bin/sh\nprintf "FLOYD_TUI_LAUNCHED:%s\\n" "$*"\n', { mode: 0o700 });
+  delete process.env.FLOYD_TUI_BIN;
+  const defaultLaunchCommand = buildFloydShellCommand();
+  assert.match(defaultLaunchCommand, /\/Volumes\/Storage\/FLOYD_RUNTIME\/bin\/floyd-tui.*floyd --continue/);
+  assert.doesNotMatch(defaultLaunchCommand, /(^|[ ;])omp([ ;]|$)/, 'default launch never resolves omp from PATH');
+  process.env.FLOYD_TUI_BIN = 'relative-omp';
+  assert.throws(() => buildFloydShellCommand(), /must be an absolute path/);
+  process.env.FLOYD_TUI_BIN = tuiBin;
+  const launchCommand = buildFloydShellCommand();
+  assert.match(launchCommand, /fake-omp.*floyd --continue/);
+  assert.doesNotMatch(launchCommand, /(^|[ ;])omp([ ;]|$)/, 'launch never falls through to a PATH-resolved omp');
+
+  let loopbackNext = false;
+  let deniedStatus = null;
+  let deniedPayload = null;
+  requireLoopback({ socket: { remoteAddress: '192.168.1.44' } }, {
+    status(status) { deniedStatus = status; return this; },
+    json(payload) { deniedPayload = payload; }
+  }, () => { loopbackNext = true; });
+  assert.equal(loopbackNext, false);
+  assert.equal(deniedStatus, 403);
+  assert.equal(deniedPayload.error.type, 'loopback_required');
+  assert.equal(coreRequests, 0, 'non-loopback rejection does not contact Core');
 
   const reservation = http.createServer();
   const surfacePort = await listen(reservation);
@@ -84,7 +190,8 @@ async function run() {
       FLOYD_CORE_URL: `http://127.0.0.1:${corePort}`,
       FLOYD_CORE_PORT: String(corePort),
       FLOYD_RUNTIME_ROOT: runtimeRoot,
-      FLOYD_WORKSTATION_ROOT: '/Volumes/Storage/FLOYD_WORKSTATION'
+      FLOYD_WORKSTATION_ROOT: '/Volumes/Storage/FLOYD_WORKSTATION',
+      FLOYD_TUI_BIN: tuiBin
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -98,10 +205,50 @@ async function run() {
     assert.equal(health.status, 200);
     assert.deepEqual(JSON.parse(health.body), { status: 'ok', engine: { healthy: true, name: 'fake-opencode' } });
 
+    const negotiation = await post(surfacePort, '/api/floyd/experience/negotiate');
+    assert.equal(negotiation.status, 200);
+    assert.equal(JSON.parse(negotiation.body).accepted, true);
+    const current = await get(surfacePort, '/api/floyd/experience');
+    assert.equal(current.status, 200);
+    assert.equal(JSON.parse(current.body).active.run_id, 'run-1');
+    const presence = await post(surfacePort, '/api/floyd/experience/presence', { expected_revision: revision });
+    assert.equal(presence.status, 200);
+    assert.deepEqual(Object.keys(lastPresencePatch).sort(), ['expected_revision', 'surface']);
+    assert.deepEqual(lastPresencePatch.surface, {
+      surface_id: 'pty', sdk_version: '1.0.0',
+      capabilities: ['terminal-transport', 'experience-read', 'floyd-launch'],
+      transcript_cursor: 21, transcript_epoch: 'epoch-1', last_event_id: '21'
+    });
+
+    const stalePresence = await post(surfacePort, '/api/floyd/experience/presence', { expected_revision: revision - 1 });
+    assert.equal(stalePresence.status, 409);
+    assert.equal(JSON.parse(stalePresence.body).error, 'revision_conflict');
+
+    await new Promise((resolve, reject) => {
+      const request = http.get({ hostname: '127.0.0.1', port: surfacePort, path: '/api/floyd/experience/stream' }, (response) => {
+        response.once('data', (chunk) => {
+          assert.match(chunk.toString(), /event: experience/);
+          request.destroy();
+          resolve();
+        });
+      });
+      request.once('error', (error) => {
+        if (error.code !== 'ECONNRESET') reject(error);
+      });
+    });
+    const streamAbortDeadline = Date.now() + 2_000;
+    while (!experienceStreamClosed && Date.now() < streamAbortDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.equal(experienceStreamClosed, true, 'browser disconnect cancels the Core Experience stream');
+
     mode = 'unauthorized';
     const denied = await get(surfacePort, '/api/floyd/health');
     assert.equal(denied.status, 401);
     assert.deepEqual(JSON.parse(denied.body), { error: { type: 'auth', message: 'exact upstream auth failure' } });
+    const deniedStream = await get(surfacePort, '/api/floyd/experience/stream');
+    assert.equal(deniedStream.status, 401);
+    assert.deepEqual(JSON.parse(deniedStream.body), { error: { type: 'auth', message: 'exact upstream auth failure' } });
 
     mode = 'delay';
     delayedStarted = new Promise((resolve) => { resolveDelayedStarted = resolve; });
@@ -136,7 +283,7 @@ async function run() {
           clearTimeout(timer);
           reject(new Error(`${message.code}: ${message.message}`));
         }
-        if (acknowledged && output.includes('fake-opencode')) {
+        if (acknowledged && output.includes('FLOYD_TUI_LAUNCHED:floyd --continue')) {
           clearTimeout(timer);
           socket.send(JSON.stringify({ type: 'close' }));
           socket.close();
@@ -146,7 +293,7 @@ async function run() {
       socket.on('error', reject);
     });
 
-    console.log('PASS TerminalOne Floyd Core SDK health, error, abort, and PTY checks');
+    console.log('PASS TerminalOne Floyd Experience presence, stream abort, exact errors, and semantic TUI launch');
   } finally {
     child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));

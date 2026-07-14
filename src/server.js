@@ -9,7 +9,15 @@ const fs = require('fs');
 const WebSocket = require('ws');
 const pty = require('node-pty');
 const { randomUUID } = require('node:crypto');
-const { buildFloydShellCommand, forwardFloydHealth } = require('./floyd-core');
+const {
+  buildFloydShellCommand,
+  forwardFloydExperience,
+  forwardFloydHealth,
+  negotiateFloydExperience,
+  publishFloydPresence,
+  requireLoopback,
+  streamFloydExperience
+} = require('./floyd-core');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -485,6 +493,7 @@ function bindWsToSession(ws, session) {
 // ─── Express app ────────────────────────────────────────────────────────────
 
 const app = express();
+app.use(express.json({ limit: '16kb' }));
 // App assets are served with no-store so the browser always runs the latest
 // frontend (critical during input/dictation iteration — a cached input-guard.mjs
 // silently reproduces already-fixed echo bugs).
@@ -494,7 +503,11 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules')));
 
 app.get('/health', (req, res) => { res.json({ status: 'ok', sessions: activeSessions.size }); });
-app.get('/api/floyd/health', forwardFloydHealth);
+app.get('/api/floyd/health', requireLoopback, forwardFloydHealth);
+app.post('/api/floyd/experience/negotiate', requireLoopback, negotiateFloydExperience);
+app.get('/api/floyd/experience', requireLoopback, forwardFloydExperience);
+app.post('/api/floyd/experience/presence', requireLoopback, publishFloydPresence);
+app.get('/api/floyd/experience/stream', requireLoopback, streamFloydExperience);
 app.get('/admin/sessions', (req, res) => {
   const sessions = Array.from(activeSessions.values()).map((s) => {
     const resumable = !s.ws && !!s.ptyProcess && !s.processExited && graceTimers.has(s.id);

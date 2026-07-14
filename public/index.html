@@ -343,7 +343,7 @@
   <header class="terminal-header">
    <div class="terminal-title">TerminalOne</div>
    <div class="terminal-actions">
-    <button id="floydBtn" type="button" title="Prepare the canonical Floyd Core CLI">Floyd</button>
+    <button id="floydBtn" type="button" title="Launch the Floyd coding partner and continue active context">Floyd</button>
     <button id="settingsBtn" type="button" title="Settings">Settings</button>
     <button id="reconnectBtn" type="button">Reconnect</button>
     <button id="closeBtn" type="button">Close</button>
@@ -1007,7 +1007,7 @@
      break;
     }
     case 'floyd-ready': {
-     setFooter('Floyd Core CLI prepared as `floyd` in this shell');
+     setFooter('Admitted Floyd TUI launched');
      break;
     }
     case 'resume-failed': {
@@ -1291,7 +1291,8 @@
     'haptic-keys', 'keepalive', 'multi-window-sync', 'phone-landscape-focus',
     'session-lock', 'settings-sync', 'shortcut-help', 'smart-completions',
     'smart-suggest', 'split-view', 'stylus-support', 'swipe-history',
-    'swipe-sessions', 'tab-reorder', 'two-finger-menu', 'window-title'
+    'swipe-sessions', 'tab-reorder', 'two-finger-menu', 'window-title',
+    'floyd-experience'
   ];
   (async () => {
     const loaded = [];
