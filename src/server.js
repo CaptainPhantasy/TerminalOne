@@ -392,7 +392,7 @@ function handleMessage(session, ws, data) {
       const controller = new AbortController();
       const abort = () => controller.abort();
       ws.once('close', abort);
-      void resolveFloydLaunchContext(controller.signal).then((context) => {
+      void resolveFloydLaunchContext(controller.signal, data.context || null).then((context) => {
         if (controller.signal.aborted || session.ws !== ws || !session.ptyProcess || session.processExited) return;
         session.ptyProcess.write(buildFloydShellCommand(context) + '\r');
         if (ws.readyState === WebSocket.OPEN) {

@@ -41,7 +41,7 @@ function trustedProjectRoot(value) {
 }
 
 /** Resolve one referentially consistent active continuation entirely from Core-owned state. */
-async function resolveFloydLaunchContext(signal) {
+async function resolveFloydLaunchContext(signal, expected = null) {
   const core = client();
   const envelope = await core.experience('primary', signal);
   const projectId = trustedId(envelope.active?.project_id, 'project ID');
@@ -50,6 +50,14 @@ async function resolveFloydLaunchContext(signal) {
   const eventId = envelope.last_event_id == null || envelope.last_event_id === ''
     ? null
     : trustedId(envelope.last_event_id, 'event ID');
+  if (expected) {
+    const expectedProjectId = trustedId(expected.projectId, 'expected project ID');
+    const expectedSessionId = trustedId(expected.sessionId, 'expected session ID');
+    const expectedRunId = trustedId(expected.runId, 'expected run ID');
+    if (projectId !== expectedProjectId || sessionId !== expectedSessionId || runId !== expectedRunId) {
+      throw new Error('active Floyd context no longer matches the requested remote continuation');
+    }
+  }
   const state = await core.state(signal);
   const project = state.projects?.find((candidate) => candidate.id === projectId);
   const session = state.sessions?.find((candidate) => candidate.id === sessionId);

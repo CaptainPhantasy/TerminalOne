@@ -107,7 +107,8 @@ async function run() {
   assert.match(browserShell, /launchQuery\.delete\('floyd'\)[\s\S]*history\.replaceState/, 'continuation marker is removed from browser history');
   assert.match(browserShell, /integratedFloydContinue && !integratedFloydStarted && !msg\.resumed[\s\S]*queueMicrotask\(launchFloyd\)/, 'a fresh integrated terminal launches Floyd exactly once');
   assert.doesNotMatch(browserShell, /integratedFloydEmbedded &&[^\n]*launchFloyd/, 'the embed cache-busting marker never launches Floyd');
-  assert.match(browserShell, /event\.source !== window\.parent[\s\S]*floyd:surface-close[\s\S]*unifiedParentOriginAllowed\(event\.origin\)[\s\S]*requestId\.length > 160[\s\S]*closeConnection\(\);[\s\S]*floyd:surface-closed[\s\S]*requestId/, 'the loopback parent receives a bounded-request acknowledgement after explicit PTY teardown is issued');
+  assert.match(browserShell, /event\.source !== window\.parent[\s\S]*unifiedParentOriginAllowed\(event\.origin\)[\s\S]*floyd:surface-close[\s\S]*requestId\.length > 160[\s\S]*closeConnection\(\);[\s\S]*floyd:surface-closed[\s\S]*requestId/, 'the admitted local or remote parent receives a bounded-request acknowledgement after explicit PTY teardown is issued');
+  assert.match(browserShell, /floyd:continue-context[\s\S]*integratedFloydContext[\s\S]*type: 'floyd'[\s\S]*context: integratedFloydContext/, 'remote semantic continuation passes only bounded Floyd identifiers from the admitted parent');
   assert.doesNotMatch(browserShell, /[?&](session|run|event|token|secret)=/i, 'integrated URL carries no Core identity or credential');
   let mode = 'ok';
   let delayedStarted;

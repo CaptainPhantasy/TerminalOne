@@ -407,6 +407,7 @@
   const integratedFloydMarker = launchQuery.get('floyd');
   const integratedFloydContinue = integratedFloydMarker === 'continue';
   const integratedFloydEmbedded = integratedFloydMarker === 'integrated';
+  let integratedFloydContext = null;
   let integratedFloydStarted = false;
   if (launchQuery.has('floyd')) {
    launchQuery.delete('floyd');
@@ -547,8 +548,16 @@
   }
 
   window.addEventListener('message', (event) => {
-   if (event.source !== window.parent || event.data?.type !== 'floyd:surface-close'
-    || !unifiedParentOriginAllowed(event.origin)) return;
+   if (event.source !== window.parent || !unifiedParentOriginAllowed(event.origin)) return;
+   if (event.data?.type === 'floyd:continue-context') {
+    const context = event.data.context;
+    const validId = (value) => typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value);
+    if (context && validId(context.projectId) && validId(context.sessionId) && validId(context.runId)) {
+     integratedFloydContext = { projectId: context.projectId, sessionId: context.sessionId, runId: context.runId };
+    }
+    return;
+   }
+   if (event.data?.type !== 'floyd:surface-close') return;
    const requestId = event.data?.requestId;
    if (typeof requestId !== 'string' || requestId.length < 1 || requestId.length > 160) return;
    closeConnection();
@@ -1199,7 +1208,7 @@
     showBanner('Connect a terminal before launching Floyd', 'error');
     return;
    }
-   ws.send(JSON.stringify({ type: 'floyd' }));
+   ws.send(JSON.stringify({ type: 'floyd', ...(integratedFloydContext ? { context: integratedFloydContext } : {}) }));
   }
 
   // ── Settings UI ─────────────────────────────────────────────────────────────
