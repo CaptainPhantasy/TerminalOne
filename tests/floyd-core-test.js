@@ -229,6 +229,7 @@ async function run() {
       FLOYD_RUNTIME_ROOT: runtimeRoot,
       FLOYD_WORKSTATION_ROOT: '/Volumes/Storage/FLOYD_WORKSTATION',
       FLOYD_TUI_BIN: tuiBin,
+      FLOYD_SURFACE_COMMIT: 'pty-test-commit',
       TERMINALONE_ALLOWED_ORIGIN: `http://127.0.0.1:${surfacePort}`
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -239,6 +240,12 @@ async function run() {
 
   try {
     await waitForSurface(surfacePort);
+    const admittedHealth = JSON.parse((await get(surfacePort, '/health')).body);
+    assert.deepEqual(admittedHealth.identity, {
+      surface_id: 'pty',
+      source_root: path.join(__dirname, '..'),
+      source_commit: 'pty-test-commit'
+    });
     const origin = allowedOrigin(surfacePort);
     const wsBase = `ws://127.0.0.1:${surfacePort}/ws`;
     await assert.rejects(() => requestTicket(surfacePort, 'https://hostile.example'), /ticket request failed \(403\)/);

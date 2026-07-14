@@ -31,6 +31,11 @@ const PONG_TIMEOUT_MS = 5_000;
 const KILL_GRACE_MS = 1_000;
 const MAX_COLS = 500;
 const MAX_ROWS = 200;
+const SURFACE_IDENTITY = Object.freeze({
+  surface_id: 'pty',
+  source_root: process.cwd(),
+  source_commit: process.env.FLOYD_SURFACE_COMMIT || 'unverified'
+});
 
 // Resume: when a WS drops unexpectedly, keep the PTY alive this long so the
 // client can reconnect to the same session. Output produced while detached
@@ -511,7 +516,9 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 }));
 app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules')));
 
-app.get('/health', (req, res) => { res.json({ status: 'ok', sessions: activeSessions.size }); });
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', sessions: activeSessions.size, identity: SURFACE_IDENTITY });
+});
 app.get('/api/floyd/health', requireLoopback, forwardFloydHealth);
 app.post('/api/floyd/experience/negotiate', requireLoopback, negotiateFloydExperience);
 app.get('/api/floyd/experience', requireLoopback, forwardFloydExperience);
