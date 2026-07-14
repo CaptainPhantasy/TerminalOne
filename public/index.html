@@ -532,6 +532,20 @@
 
   const $ = (sel) => document.querySelector(sel);
 
+  function unifiedParentOriginAllowed(value) {
+   try {
+    const origin = new URL(value);
+    return origin.protocol === 'http:' && origin.port === '41414'
+     && ['127.0.0.1', 'localhost', '::1'].includes(origin.hostname);
+   } catch (_) { return false; }
+  }
+
+  window.addEventListener('message', (event) => {
+   if (event.source !== window.parent || event.data?.type !== 'floyd:surface-close'
+    || !unifiedParentOriginAllowed(event.origin)) return;
+   closeConnection();
+  });
+
   function addTerminalResource(disposer) {
    if (!disposer) return;
    if (typeof disposer === 'function') {
