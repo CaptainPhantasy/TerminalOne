@@ -112,7 +112,9 @@ async function run() {
   let projectRoot;
   const experience = () => ({
     id: 'primary', schema_version: '1.0.0', revision,
-    active: { project_id: 'project-1', session_id: 'session-1', run_id: 'run-1' },
+    active: mode === 'missing-context'
+      ? { project_id: 'project-1', session_id: null, run_id: 'run-1' }
+      : { project_id: 'project-1', session_id: 'session-1', run_id: 'run-1' },
     model_route: { provider: null, model: null, base_url: null, provider_profile_id: null, credential_ref: null },
     transcript_cursor: 21, transcript_epoch: 'epoch-1', last_event_id: '21',
     pending_questions: [], pending_permissions: [], composer_draft: '',
@@ -192,16 +194,23 @@ async function run() {
   const tuiBin = path.join(runtimeRoot, 'fake-omp');
   fs.writeFileSync(tuiBin, '#!/bin/sh\nprintf "FLOYD_TUI_CWD:%s\\n" "$PWD"\nprintf "FLOYD_TUI_LAUNCHED:%s\\n" "$*"\n', { mode: 0o700 });
   delete process.env.FLOYD_TUI_BIN;
-  const defaultLaunchCommand = buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot });
-  assert.match(defaultLaunchCommand, /cd -- .*active project.*\/Volumes\/Storage\/FLOYD_RUNTIME\/bin\/floyd-tui.*floyd --project-id 'project-1' --continue/);
+  const launchContext = {
+    projectId: 'project-1', sessionId: 'session-1', runId: 'run-1', eventId: '21', rootPath: projectRoot
+  };
+  const defaultLaunchCommand = buildFloydShellCommand(launchContext);
+  assert.match(defaultLaunchCommand, /cd -- .*active project.*\/Volumes\/Storage\/FLOYD_RUNTIME\/bin\/floyd-tui.*floyd --project-id 'project-1' --session 'session-1' --run 'run-1' --event '21'/);
   assert.doesNotMatch(defaultLaunchCommand, /(^|[ ;])omp([ ;]|$)/, 'default launch never resolves omp from PATH');
   process.env.FLOYD_TUI_BIN = 'relative-omp';
-  assert.throws(() => buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot }), /must be an absolute path/);
+  assert.throws(() => buildFloydShellCommand(launchContext), /must be an absolute path/);
   process.env.FLOYD_TUI_BIN = tuiBin;
-  const launchCommand = buildFloydShellCommand({ projectId: 'project-1', rootPath: projectRoot });
-  assert.match(launchCommand, /fake-omp.*floyd --project-id 'project-1' --continue/);
+  const launchCommand = buildFloydShellCommand(launchContext);
+  assert.match(launchCommand, /fake-omp.*floyd --project-id 'project-1' --session 'session-1' --run 'run-1' --event '21'/);
   assert.doesNotMatch(launchCommand, /(^|[ ;])omp([ ;]|$)/, 'launch never falls through to a PATH-resolved omp');
-  assert.throws(() => buildFloydShellCommand({ projectId: "project-1'; touch /tmp/owned", rootPath: projectRoot }), /invalid Floyd project ID/);
+  assert.throws(() => buildFloydShellCommand({ ...launchContext, projectId: "project-1'; touch /tmp/owned" }), /invalid Floyd project ID/);
+  assert.throws(() => buildFloydShellCommand({ ...launchContext, sessionId: undefined }), /invalid Floyd session ID/);
+  assert.throws(() => buildFloydShellCommand({ ...launchContext, runId: undefined }), /invalid Floyd run ID/);
+  assert.throws(() => buildFloydShellCommand({ ...launchContext, eventId: "21'; touch /tmp/owned" }), /invalid Floyd event ID/);
+  assert.doesNotMatch(buildFloydShellCommand({ ...launchContext, eventId: null }), / --event /);
 
   let loopbackNext = false;
   let deniedStatus = null;
@@ -344,6 +353,29 @@ async function run() {
       }).catch(reject);
     });
 
+    mode = 'missing-context';
+    await new Promise((resolve, reject) => {
+      let socket;
+      const timer = setTimeout(() => reject(new Error('missing-context launch did not fail closed')), 15_000);
+      createTestWebSocket(surfacePort).then((created) => {
+        socket = created;
+        socket.on('open', () => socket.send(JSON.stringify({ type: 'shell', cols: 100, rows: 30 })));
+        socket.on('message', (raw) => {
+          const message = JSON.parse(raw.toString());
+          if (message.type === 'ready') socket.send(JSON.stringify({ type: 'floyd' }));
+          if (message.type === 'floyd-ready') reject(new Error('missing-context launch was acknowledged'));
+          if (message.type === 'error' && message.code === 'FLOYD_LAUNCH_FAILED') {
+            clearTimeout(timer);
+            assert.match(message.message, /invalid Floyd session ID/);
+            socket.send(JSON.stringify({ type: 'close' }));
+            socket.close();
+            resolve();
+          }
+        });
+        socket.on('error', reject);
+      }).catch(reject);
+    });
+
     mode = 'ok';
     await new Promise((resolve, reject) => {
       let socket;
@@ -369,7 +401,7 @@ async function run() {
           }
           if (acknowledged
             && output.includes(`FLOYD_TUI_CWD:${projectRoot}`)
-            && output.includes('FLOYD_TUI_LAUNCHED:floyd --project-id project-1 --continue')) {
+            && output.includes('FLOYD_TUI_LAUNCHED:floyd --project-id project-1 --session session-1 --run run-1 --event 21')) {
             clearTimeout(timer);
             socket.send(JSON.stringify({ type: 'close' }));
             socket.close();
@@ -380,7 +412,7 @@ async function run() {
       }).catch(reject);
     });
 
-    console.log('PASS TerminalOne ticket gate, project-bound Floyd continuation, wrong-project rejection, stream abort, and exact errors');
+    console.log('PASS TerminalOne ticket gate, exact Floyd project/session/run/event handoff, missing-context and wrong-project rejection, stream abort, and exact errors');
   } finally {
     child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));

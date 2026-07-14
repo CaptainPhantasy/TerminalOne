@@ -2,6 +2,12 @@
 
 All notable changes to TerminalOne.
 
+## Unreleased
+
+- The Floyd action now launches the admitted TUI with Core-owned project, session,
+  run, and optional event identifiers. Missing or inconsistent active context fails
+  closed before TerminalOne writes a command to the PTY.
+
 ## [1.0.0] — 2026-06-26
 
 ### Initial public release

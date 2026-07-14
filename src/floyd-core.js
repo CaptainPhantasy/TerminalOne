@@ -47,6 +47,9 @@ async function resolveFloydLaunchContext(signal) {
   const projectId = trustedId(envelope.active?.project_id, 'project ID');
   const sessionId = trustedId(envelope.active?.session_id, 'session ID');
   const runId = trustedId(envelope.active?.run_id, 'run ID');
+  const eventId = envelope.last_event_id == null || envelope.last_event_id === ''
+    ? null
+    : trustedId(envelope.last_event_id, 'event ID');
   const state = await core.state(signal);
   const project = state.projects?.find((candidate) => candidate.id === projectId);
   const session = state.sessions?.find((candidate) => candidate.id === sessionId);
@@ -56,14 +59,20 @@ async function resolveFloydLaunchContext(signal) {
   if (!run || run.project_id !== projectId || run.session_id !== sessionId) {
     throw new Error('active Floyd run does not belong to the restored project and session');
   }
-  return { projectId, sessionId, runId, rootPath: trustedProjectRoot(project.root_path) };
+  return { projectId, sessionId, runId, eventId, rootPath: trustedProjectRoot(project.root_path) };
 }
 
 /** Launch the admitted semantic TUI in the Core-resolved project; browser input supplies no command data. */
 function buildFloydShellCommand(context) {
   const projectId = trustedId(context?.projectId, 'project ID');
+  const sessionId = trustedId(context?.sessionId, 'session ID');
+  const runId = trustedId(context?.runId, 'run ID');
+  const eventId = context?.eventId == null || context.eventId === ''
+    ? null
+    : trustedId(context.eventId, 'event ID');
   const rootPath = trustedProjectRoot(context?.rootPath);
-  return `cd -- ${shellQuote(rootPath)} && ${shellQuote(admittedTuiBin())} floyd --project-id ${shellQuote(projectId)} --continue`;
+  const eventArgument = eventId == null ? '' : ` --event ${shellQuote(eventId)}`;
+  return `cd -- ${shellQuote(rootPath)} && ${shellQuote(admittedTuiBin())} floyd --project-id ${shellQuote(projectId)} --session ${shellQuote(sessionId)} --run ${shellQuote(runId)}${eventArgument}`;
 }
 
 function sendPayload(res, status, payload) {
