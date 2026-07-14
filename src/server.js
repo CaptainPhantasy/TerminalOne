@@ -8,11 +8,13 @@ const fs = require('fs');
 
 const WebSocket = require('ws');
 const pty = require('node-pty');
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('node:crypto');
+const { buildFloydShellCommand, forwardFloydHealth } = require('./floyd-core');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 11001;
+const HOST = process.env.HOST || '127.0.0.1';
 const MAX_CONCURRENT_SESSIONS = 10;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 5_000;
@@ -365,6 +367,23 @@ function handleMessage(session, ws, data) {
       }
       break;
     }
+    case 'floyd': {
+      if (!session.ptyProcess || session.processExited) {
+        wsError(ws, 'NO_ACTIVE_SHELL', 'Start or resume a shell before launching Floyd', session.id);
+        break;
+      }
+      try {
+        // The command is built exclusively from trusted server configuration.
+        // Browser input cannot inject a path, token, provider, or model route.
+        session.ptyProcess.write(buildFloydShellCommand() + '\r');
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'floyd-ready', sessionId: session.id }));
+        }
+      } catch (e) {
+        wsError(ws, 'FLOYD_LAUNCH_FAILED', `Could not prepare Floyd Core CLI: ${e.message}`, session.id);
+      }
+      break;
+    }
     case 'resize': {
       const { cols, rows } = clampDims(data.cols, data.rows);
       session.lastCols = cols;
@@ -475,6 +494,7 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules')));
 
 app.get('/health', (req, res) => { res.json({ status: 'ok', sessions: activeSessions.size }); });
+app.get('/api/floyd/health', forwardFloydHealth);
 app.get('/admin/sessions', (req, res) => {
   const sessions = Array.from(activeSessions.values()).map((s) => {
     const resumable = !s.ws && !!s.ptyProcess && !s.processExited && graceTimers.has(s.id);
@@ -502,10 +522,21 @@ app.post('/admin/sessions/:id/kill', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
+// Bind failures used to surface as an unhandled WebSocketServer exception.
+// Keep the failure explicit and structured without pretending the app started.
+server.on('error', (err) => {
+  error(null, 'HTTP server error', { code: err.code || null, err: err.message });
+  process.exitCode = 1;
+});
+wss.on('error', (err) => {
+  error(null, 'WebSocket server error', { code: err.code || null, err: err.message });
+  process.exitCode = 1;
+});
+
 wss.on('connection', (ws) => {
   // Each connection starts as a fresh placeholder session. It becomes "real"
   // when the client sends `shell`, or it adopts an existing session via `resume`.
-  const sessionId = uuidv4();
+  const sessionId = randomUUID();
   /** @type {Session} */
   const session = {
     id: sessionId,
@@ -544,6 +575,6 @@ async function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-server.listen(PORT, () => {
-  info(null, `TerminalOne running at http://localhost:${PORT}`, { maxSessions: MAX_CONCURRENT_SESSIONS });
+server.listen(PORT, HOST, () => {
+  info(null, `TerminalOne running at http://${HOST}:${PORT}`, { maxSessions: MAX_CONCURRENT_SESSIONS, host: HOST });
 });

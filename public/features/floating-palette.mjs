@@ -56,7 +56,7 @@ export function init(T1) {
   const fab = document.createElement('button');
   fab.type = 'button';
   fab.className = 't1-fab';
-  fab.textContent = '✦';
+  fab.textContent = 'CMD';
   fab.setAttribute('aria-label', 'Open command palette');
   document.body.appendChild(fab);
 
@@ -65,7 +65,7 @@ export function init(T1) {
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-label', 'Tablet command palette');
   sheet.innerHTML = `
-    <header><h3>Command Palette</h3><button type="button" class="sheet-close" aria-label="Close palette">✕</button></header>
+    <header><h3>Command Palette</h3><button type="button" class="sheet-close" aria-label="Close palette">Close</button></header>
     <div class="t1-tablet-actions"></div>
   `;
   document.body.appendChild(sheet);

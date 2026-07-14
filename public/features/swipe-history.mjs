@@ -72,7 +72,7 @@ export function init(T1) {
   tray.setAttribute('role', 'dialog');
   tray.setAttribute('aria-label', 'Command history');
   tray.innerHTML = `
-    <header><h3>Recent commands</h3><button type="button" class="close-btn" aria-label="Close history">✕</button></header>
+    <header><h3>Recent commands</h3><button type="button" class="close-btn" aria-label="Close history">Close</button></header>
     <div class="t1-swipe-history-list"></div>
   `;
   document.body.appendChild(tray);

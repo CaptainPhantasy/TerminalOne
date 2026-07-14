@@ -343,11 +343,13 @@
   <header class="terminal-header">
    <div class="terminal-title">TerminalOne</div>
    <div class="terminal-actions">
-    <button id="settingsBtn" type="button" title="Settings">⚙ Settings</button>
+    <button id="floydBtn" type="button" title="Prepare the canonical Floyd Core CLI">Floyd</button>
+    <button id="settingsBtn" type="button" title="Settings">Settings</button>
     <button id="reconnectBtn" type="button">Reconnect</button>
     <button id="closeBtn" type="button">Close</button>
    </div>
    <div class="statuswrap">
+    <span class="terminal-status" id="floydStatus">Core checking</span>
     <span class="status-dot" id="statusDot"></span>
     <span class="terminal-status" id="status">Ready</span>
    </div>
@@ -1004,6 +1006,10 @@
      setFooter('Fresh shell — type to continue');
      break;
     }
+    case 'floyd-ready': {
+     setFooter('Floyd Core CLI prepared as `floyd` in this shell');
+     break;
+    }
     case 'resume-failed': {
      // Target session gone/expired — fall back to a fresh shell on this open ws.
      infoResumeFail(msg);
@@ -1115,6 +1121,29 @@
    setSessionInfo('');
   }
 
+  async function refreshFloydHealth() {
+   const status = $('#floydStatus');
+   try {
+    const response = await fetch('/api/floyd/health');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error?.message || `HTTP ${response.status}`);
+    const engineHealthy = payload?.engine?.ok === true || payload?.engine?.healthy === true;
+    status.textContent = engineHealthy ? 'Core/OpenCode online' : 'Core online; engine degraded';
+    status.className = `terminal-status ${engineHealthy ? 'connected' : 'error'}`;
+   } catch (_) {
+    status.textContent = 'Core offline';
+    status.className = 'terminal-status error';
+   }
+  }
+
+  function launchFloyd() {
+   if (!ws || ws.readyState !== WebSocket.OPEN) {
+    showBanner('Connect a terminal before launching Floyd', 'error');
+    return;
+   }
+   ws.send(JSON.stringify({ type: 'floyd' }));
+  }
+
   // ── Settings UI ─────────────────────────────────────────────────────────────
   function buildThemeOptions() {
    const sel = $('#themeSelect');
@@ -1142,6 +1171,7 @@
   applyTheme(lsGet(LS_THEME, DEFAULT_THEME));
 
   $('#settingsBtn').addEventListener('click', openSettings);
+  $('#floydBtn').addEventListener('click', launchFloyd);
   $('#settingsClose').addEventListener('click', closeSettings);
   $('#settingsModal').addEventListener('click', (e) => { if (e.target === $('#settingsModal')) closeSettings(); });
   $('#styleSelect').addEventListener('change', (e) => applyStyle(e.target.value));
@@ -1276,6 +1306,7 @@
     window.__t1Features = loaded;
   })();
 
+  refreshFloydHealth();
   connect();
 
   // Best-effort: on touch devices only, shed the browser URL bar by entering
@@ -1322,7 +1353,8 @@
     const bar = (document.body.dataset.device === 'iphone' ? $('#keybarIphone') : $('#keybarIpad'));
     return bar ? bar.querySelectorAll('.kb-key').length : 0;
    },
-   savedSession: () => lsGet(LS_SESSION, null)
+   savedSession: () => lsGet(LS_SESSION, null),
+   launchFloyd
   };
  </script>
  <script>

@@ -36,7 +36,7 @@ export function init(T1) {
   overlay.setAttribute('aria-label', 'Keyboard shortcuts');
   overlay.innerHTML = `
     <div class="t1-shortcut-panel">
-      <header><h3>Keyboard Shortcuts</h3><button type="button" class="close" aria-label="Close shortcuts">✕</button></header>
+      <header><h3>Keyboard Shortcuts</h3><button type="button" class="close" aria-label="Close shortcuts">Close</button></header>
       <div class="t1-shortcut-list"></div>
     </div>
   `;
