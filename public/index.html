@@ -537,8 +537,12 @@
   function unifiedParentOriginAllowed(value) {
    try {
     const origin = new URL(value);
-    return origin.protocol === 'http:' && origin.port === '41414'
+    const localCore = origin.protocol === 'http:' && origin.port === '41414'
      && ['127.0.0.1', 'localhost', '::1'].includes(origin.hostname);
+    const configuredRemoteParent = launchQuery.get('floyd_parent');
+    const remoteCore = configuredRemoteParent === origin.origin && origin.protocol === 'https:'
+     && origin.hostname === location.hostname;
+    return localCore || remoteCore;
    } catch (_) { return false; }
   }
 
