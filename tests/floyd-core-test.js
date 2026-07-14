@@ -101,6 +101,11 @@ async function waitForSurface(port) {
 }
 
 async function run() {
+  const browserShell = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(browserShell, /launchQuery\.get\('floyd'\) === 'continue'/, 'integrated workspace recognizes the continuation marker');
+  assert.match(browserShell, /launchQuery\.delete\('floyd'\)[\s\S]*history\.replaceState/, 'continuation marker is removed from browser history');
+  assert.match(browserShell, /integratedFloydContinue && !integratedFloydStarted && !msg\.resumed[\s\S]*queueMicrotask\(launchFloyd\)/, 'a fresh integrated terminal launches Floyd exactly once');
+  assert.doesNotMatch(browserShell, /[?&](session|run|event|token|secret)=/i, 'integrated URL carries no Core identity or credential');
   let mode = 'ok';
   let delayedStarted;
   let resolveDelayedStarted;

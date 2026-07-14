@@ -395,9 +395,22 @@
 
  <script type="module">
   import { Terminal } from '/node_modules/@xterm/xterm/lib/xterm.mjs';
-  import { FitAddon } from '/node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
+ import { FitAddon } from '/node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
  import { WebLinksAddon } from '/node_modules/@xterm/addon-web-links/lib/addon-web-links.mjs';
  import { InputGuard } from './input-guard.mjs';
+
+  // Cockpit's unified workspace can request one exact semantic continuation.
+  // The marker carries no secret or context IDs; TerminalOne asks Core for the
+  // authoritative project/session/run/event tuple and removes the marker from
+  // browser history before opening its WebSocket.
+  const launchQuery = new URLSearchParams(location.search);
+  const integratedFloydContinue = launchQuery.get('floyd') === 'continue';
+  let integratedFloydStarted = false;
+  if (launchQuery.has('floyd')) {
+   launchQuery.delete('floyd');
+   const rest = launchQuery.toString();
+   history.replaceState({}, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
+  }
 
   // ── Theme catalog ─────────────────────────────────────────────────────────
   const THEMES = {
@@ -989,6 +1002,10 @@
       setFooter(`${msg.command} · ${msg.cwd}`);
      }
      setSessionInfo(`session ${msg.sessionId.slice(0, 8)}`);
+     if (integratedFloydContinue && !integratedFloydStarted && !msg.resumed) {
+      integratedFloydStarted = true;
+      queueMicrotask(launchFloyd);
+     }
      break;
     }
     case 'output': {
@@ -1373,6 +1390,7 @@
     return bar ? bar.querySelectorAll('.kb-key').length : 0;
    },
    savedSession: () => lsGet(LS_SESSION, null),
+   integratedContinueRequested: () => integratedFloydContinue,
    launchFloyd
   };
  </script>
