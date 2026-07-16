@@ -29,6 +29,14 @@ EOF
 
 cat > "$FAKEBIN/node" <<'EOF'
 #!/bin/bash
+case "${1:-}" in
+  -p)
+    case "${2:-}" in *modules*) echo 127 ;; *) echo 22 ;; esac
+    exit 0
+    ;;
+  -v) echo v22.18.0; exit 0 ;;
+  -) exit 0 ;;
+esac
 echo "NODE:$*" >> "$STATE_FILE"
 touch "$HEALTHY_FILE"
 sleep 1
@@ -95,7 +103,10 @@ chmod +x "$FAKEBIN/lsof"
 ALT_ROOT="$TMP/alt-checkout"
 mkdir -p "$ALT_ROOT/scripts" "$ALT_ROOT/src"
 cp "$ROOT/scripts/t1.sh" "$ALT_ROOT/scripts/t1.sh"
+cp "$ROOT/scripts/node-runtime.sh" "$ALT_ROOT/scripts/node-runtime.sh"
+cp "$ROOT/scripts/run-hooks" "$ALT_ROOT/scripts/run-hooks"
 touch "$ALT_ROOT/src/server.js"
+chmod +x "$ALT_ROOT/scripts/"*
 
 ALT_HEALTHY_FILE="$TMP/state/derived-healthy"
 STATE_FILE="$TMP/state/derived.log" \

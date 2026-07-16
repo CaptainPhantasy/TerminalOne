@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 LABEL="com.floyd.terminalone"
 APP_DIR="${TERMINALONE_APP_DIR:-$(cd "$SCRIPT_DIR/.." && pwd -P)}"
 PORT="${PORT:-11001}"
-NODE="${TERMINALONE_NODE:-$(command -v node || true)}"
+NODE="${TERMINALONE_NODE:-$($APP_DIR/scripts/node-runtime.sh path 2>/dev/null || true)}"
 PLIST_DIR="${TERMINALONE_PLIST_DIR:-$HOME/Library/LaunchAgents}"
 PLIST="$PLIST_DIR/$LABEL.plist"
 LOG_DIR="${TERMINALONE_SYSTEM_LOG_DIR:-$HOME/Library/Logs}"
@@ -32,8 +32,15 @@ DOMAIN="gui/$(id -u)"
 APP_PARENT_OVERRIDE="${TERMINALONE_APPLICATIONS_DIR:-}"
 T1_BIN_DIR_OVERRIDE="${TERMINALONE_BIN_DIR:-}"
 
-[ -n "$NODE" ] || { echo "ERROR: node not found in PATH"; exit 1; }
+[ -n "$NODE" ] || { echo "ERROR: TerminalOne requires Node 22.x; run scripts/node-runtime.sh doctor"; exit 1; }
 [ -f "$APP_DIR/src/server.js" ] || { echo "ERROR: $APP_DIR/src/server.js not found (is the volume mounted?)"; exit 1; }
+if [ "${TERMINALONE_SKIP_RUNTIME_CHECK:-0}" != "1" ]; then
+  "$APP_DIR/scripts/node-runtime.sh" doctor >/dev/null || {
+    echo "Repairing TerminalOne native modules for $($NODE -v)..."
+    "$APP_DIR/scripts/node-runtime.sh" repair
+  }
+fi
+"$APP_DIR/scripts/run-hooks" pre-install
 mkdir -p "$PLIST_DIR" "$LOG_DIR"
 
 # NOTE: no WorkingDirectory key — the server resolves all paths via __dirname, and a
@@ -121,7 +128,7 @@ if [ -n "$T1_BIN_DIR_OVERRIDE" ]; then
   mkdir -p "$T1_BIN_DIR_OVERRIDE"
   T1_BIN_DIR="$T1_BIN_DIR_OVERRIDE"
 else
-  for d in "$HOME/bin" /usr/local/bin "$HOME/.local/bin"; do
+  for d in "$HOME/.local/bin" /usr/local/bin "$HOME/bin"; do
     if [ -d "$d" ] && [ -w "$d" ] && is_internal "$d"; then T1_BIN_DIR="$d"; break; fi
   done
   if [ -z "$T1_BIN_DIR" ]; then
@@ -150,6 +157,11 @@ if [ ! -f "\$T1_APP" ]; then
   fi
   exit 1
 fi
+case "\${1:-}" in
+  doctor) exec "$APP_DIR/scripts/node-runtime.sh" doctor ;;
+  repair) exec "$APP_DIR/scripts/node-runtime.sh" repair ;;
+  hooks) for d in "$APP_DIR/.terminal-hooks" "$HOME/.config/terminal-workspace/hooks/terminalone"; do [ ! -d "\$d" ] || find "\$d" -maxdepth 2 -type f; done | sort ; exit 0 ;;
+esac
 exec "\$T1_APP" "\$@"
 T1EOF
 chmod +x "$T1_LINK"
@@ -167,7 +179,7 @@ else
   mkdir -p "$APP_PARENT"
 fi
 APP_BUNDLE="$APP_PARENT/TerminalOne.app"
-mkdir -p "$APP_BUNDLE/Contents/MacOS"
+mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cat > "$APP_BUNDLE/Contents/Info.plist" <<APPEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -175,21 +187,26 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<APPEOF
 <dict>
   <key>CFBundleName</key><string>TerminalOne</string>
   <key>CFBundleDisplayName</key><string>TerminalOne</string>
-  <key>CFBundleIdentifier</key><string>com.floyd.terminalone.launcher</string>
+  <key>CFBundleIdentifier</key><string>com.floyd.terminalone</string>
   <key>CFBundleVersion</key><string>1.0</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>TerminalOne</string>
   <key>CFBundleIconFile</key><string>TerminalOne</string>
-  <key>LSUIElement</key><true/>
+  <key>LSMinimumSystemVersion</key><string>13.0</string>
+  <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
 APPEOF
-cat > "$APP_BUNDLE/Contents/MacOS/TerminalOne" <<APPEOF
-#!/bin/bash
-# Delegates to the internal-disk t1 binary, which handles the mount-check + GUI error.
-exec "$T1_LINK"
-APPEOF
-chmod +x "$APP_BUNDLE/Contents/MacOS/TerminalOne"
+if [ -n "${TERMINALONE_SWIFTC:-}" ]; then
+  [ -x "$TERMINALONE_SWIFTC" ] || { echo "ERROR: TERMINALONE_SWIFTC is not executable." >&2; exit 1; }
+  "$TERMINALONE_SWIFTC" -parse-as-library -O -framework AppKit -framework WebKit \
+    "$APP_DIR/native/TerminalOneApp.swift" -o "$APP_BUNDLE/Contents/MacOS/TerminalOne"
+else
+  xcrun --find swiftc >/dev/null 2>&1 || { echo "ERROR: Swift compiler unavailable; install Apple Command Line Tools." >&2; exit 1; }
+  xcrun swiftc -parse-as-library -O -framework AppKit -framework WebKit \
+    "$APP_DIR/native/TerminalOneApp.swift" -o "$APP_BUNDLE/Contents/MacOS/TerminalOne"
+fi
+printf '%s\n' "$T1_LINK" > "$APP_BUNDLE/Contents/Resources/launcher-path.txt"
 # Build the .icns from the brand icon so it shows in Spotlight/Launchpad/Dock.
 RES_DIR="$APP_BUNDLE/Contents/Resources"
 mkdir -p "$RES_DIR"
@@ -210,6 +227,7 @@ fi
 xattr -dr com.apple.quarantine "$APP_BUNDLE" 2>/dev/null || true
 # Register with Launch Services so Spotlight/Launchpad index it promptly.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP_BUNDLE" 2>/dev/null || true
+"$APP_DIR/scripts/run-hooks" post-install --best-effort
 # Ensure the chosen bin dir is actually on PATH. If not, add a marked line to the
 # user's shell rc (idempotent — only once). Covers zsh (default) and bash.
 T1_PATH_ADDED=""

@@ -213,22 +213,30 @@ async function run() {
 
     // 4) Reconnect and resume the SAME session id.
     const ws2 = await openWs();
+    let replayed = '';
+    const replayComplete = new Promise((resolve) => {
+      const to = setTimeout(() => {
+        ws2.off('message', onReplay);
+        resolve();
+      }, 2000);
+      function onReplay(raw) {
+        let m; try { m = JSON.parse(raw); } catch (_) { return; }
+        if (m.type === 'output') replayed += m.data;
+        if (replayed.includes('RESUME_MARKER_12345')) {
+          clearTimeout(to);
+          ws2.off('message', onReplay);
+          resolve();
+        }
+      }
+      ws2.on('message', onReplay);
+    });
     wsSend(ws2, { type: 'resume', sessionId: sid, cols: 80, rows: 24 });
     const ready2 = await waitForMsg(ws2, (m) => m.type === 'ready');
     assert(ready2.sessionId === sid, 'resume returns the same session id');
     assert(ready2.resumed === true, 'resume ready has resumed:true');
 
     // 5) The buffered output (including RESUME_MARKER) should replay.
-    let replayed = '';
-    await new Promise((resolve) => {
-      const to = setTimeout(() => { ws2.removeEventListener('message', onMsg); resolve(); }, 2000);
-      function onMsg(raw) {
-        let m; try { m = JSON.parse(raw); } catch (_) { return; }
-        if (m.type === 'output') replayed += m.data;
-        if (replayed.includes('RESUME_MARKER_12345')) { clearTimeout(to); ws2.removeEventListener('message', onMsg); resolve(); }
-      }
-      ws2.on('message', onMsg);
-    });
+    await replayComplete;
     assert(replayed.includes('RESUME_MARKER_12345'), 'buffered output replayed on resume (marker present)');
 
     // 6) Session is now attached again.

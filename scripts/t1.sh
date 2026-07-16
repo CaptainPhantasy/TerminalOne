@@ -16,6 +16,8 @@ URL="${TERMINALONE_URL:-http://localhost:$PORT}"
 HEALTH_URL="${TERMINALONE_HEALTH_URL:-$URL/health}"
 LABEL="com.floyd.terminalone"
 DOMAIN="gui/$(id -u)"
+SERVE_ONLY=false
+[ "${1:-}" = "--serve-only" ] && SERVE_ONLY=true
 
 show_error() {
   local msg="$1"
@@ -38,7 +40,8 @@ wait_for_health() {
 
 start_direct_backend() {
   mkdir -p "$LOG_DIR"
-  nohup env PORT="$PORT" node "$APP_DIR/src/server.js" >>"$LOG_DIR/local-launch.out.log" 2>>"$LOG_DIR/local-launch.err.log" &
+  "$APP_DIR/scripts/run-hooks" pre-start
+  nohup env PORT="$PORT" "$APP_DIR/scripts/node-runtime.sh" exec "$APP_DIR/src/server.js" >>"$LOG_DIR/local-launch.out.log" 2>>"$LOG_DIR/local-launch.err.log" &
 }
 
 if ! wait_for_health 1; then
@@ -51,8 +54,8 @@ if ! wait_for_health 1; then
       exit 1
     fi
 
-    if ! command -v node >/dev/null 2>&1; then
-      show_error "Node.js is not installed or not on PATH."
+    if ! "$APP_DIR/scripts/node-runtime.sh" doctor >/dev/null 2>&1; then
+      show_error "TerminalOne runtime is not ready. Run: t1 repair"
       exit 1
     fi
 
@@ -64,10 +67,17 @@ if ! wait_for_health 1; then
     start_direct_backend
 
     if ! wait_for_health 32; then
+      "$APP_DIR/scripts/run-hooks" start-error --best-effort
       show_error "TerminalOne failed to start. Logs: $LOG_DIR/local-launch.err.log"
       exit 1
     fi
+    "$APP_DIR/scripts/run-hooks" post-start --best-effort
   fi
+fi
+
+if $SERVE_ONLY; then
+  echo "TerminalOne service ready -> $URL"
+  exit 0
 fi
 
 if [ -d "/Applications/Google Chrome.app" ]; then
