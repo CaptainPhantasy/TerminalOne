@@ -24,6 +24,14 @@ const http = require('http');
 
 const PORT = process.env.RESP_PORT || 11003;
 const BASE_URL = `http://localhost:${PORT}`;
+const PROTOCOL_TIMEOUT_MS = Number.parseInt(
+  process.env.PUPPETEER_PROTOCOL_TIMEOUT_MS || '300000',
+  10
+);
+const BROWSER_LAUNCH_TIMEOUT_MS = Number.parseInt(
+  process.env.PUPPETEER_LAUNCH_TIMEOUT_MS || '120000',
+  10
+);
 
 const VIEWPORTS = [
   // ── The user's actual device: iPad (A16, 11th gen, 2025) — 10.86", 820×1180 CSS pt ──
@@ -245,7 +253,12 @@ async function run() {
     await waitForHealth();
 
     const puppeteer = require('puppeteer');
-    browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+    browser = await puppeteer.launch({
+      headless: true,
+      timeout: BROWSER_LAUNCH_TIMEOUT_MS,
+      protocolTimeout: PROTOCOL_TIMEOUT_MS,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
     // RESP_DEVICE=ipad|iphone runs a subset (each browser load is ~1.3s; the
     // harness caps a single command at 30s, so subsets keep receipts complete).
