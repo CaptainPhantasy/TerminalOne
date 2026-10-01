@@ -10,7 +10,11 @@ FAKEBIN="$TMP/fakebin"
 HOME_DIR="$TMP/home"
 APP_PARENT="$TMP/apps"
 BIN_DIR="$TMP/bin"
-mkdir -p "$ALT_ROOT/scripts" "$ALT_ROOT/src" "$ALT_ROOT/public" "$ALT_ROOT/native" "$FAKEBIN" "$HOME_DIR"
+mkdir -p "$ALT_ROOT/scripts" "$ALT_ROOT/src" "$ALT_ROOT/public" "$ALT_ROOT/native" "$FAKEBIN" "$HOME_DIR" "$BIN_DIR"
+
+printf '#!/bin/bash\nexit 99\n' > "$BIN_DIR/t1"
+chmod +x "$BIN_DIR/t1"
+old_t1_inode="$(stat -f %i "$BIN_DIR/t1")"
 
 cp "$ROOT/scripts/install-service.sh" "$ALT_ROOT/scripts/install-service.sh"
 cp "$ROOT/scripts/t1.sh" "$ALT_ROOT/scripts/t1.sh"
@@ -59,15 +63,21 @@ bash "$ALT_ROOT/scripts/install-service.sh" >/tmp/t1-install-portability.log
 PLIST_PATH="$HOME_DIR/Library/LaunchAgents/com.floyd.terminalone.plist"
 T1_PATH="$BIN_DIR/t1"
 APP_EXEC="$APP_PARENT/TerminalOne.app/Contents/MacOS/TerminalOne"
+new_t1_inode="$(stat -f %i "$T1_PATH")"
 
 [ -f "$PLIST_PATH" ]
 [ -f "$T1_PATH" ]
 [ -f "$APP_EXEC" ]
+[ "$old_t1_inode" != "$new_t1_inode" ]
 
 grep -q "$ALT_ROOT/src/server.js" "$PLIST_PATH"
 grep -q "$ALT_ROOT/scripts/t1.sh" "$T1_PATH"
+grep -q 'exec /bin/bash "$T1_APP" "$@"' "$T1_PATH"
 file "$APP_EXEC" | grep -q 'Mach-O.*executable'
 grep -q "$BIN_DIR/t1" "$APP_PARENT/TerminalOne.app/Contents/Resources/launcher-path.txt"
+
+help_output="$($T1_PATH --help)"
+printf '%s\n' "$help_output" | grep -q '^Usage: t1 '
 
 if grep -q '/Volumes/SanDisk1Tb/TerminalOne' "$PLIST_PATH" "$T1_PATH" "$APP_EXEC"; then
   echo "generated artifacts still reference the original machine path"

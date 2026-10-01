@@ -19,6 +19,25 @@ DOMAIN="gui/$(id -u)"
 SERVE_ONLY=false
 [ "${1:-}" = "--serve-only" ] && SERVE_ONLY=true
 
+show_usage() {
+  cat <<'EOF'
+Usage: t1 [--serve-only]
+
+Open TerminalOne, or ensure its service is healthy without opening a browser.
+
+Options:
+  --serve-only  Start or verify the service, then exit
+  -h, --help    Show this help and exit
+EOF
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    show_usage
+    exit 0
+    ;;
+esac
+
 show_error() {
   local msg="$1"
   printf 't1: %s\n' "$msg" >&2
@@ -49,7 +68,11 @@ if ! wait_for_health 1; then
   launchctl kickstart "$DOMAIN/$LABEL" 2>/dev/null || true
 
   if ! wait_for_health 16; then
-    if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | grep -vq '[Nn]ode'; then
+    # lsof's first line is a column header, not a listener. Inspect command
+    # names only on real listener rows so a starting Node service is not
+    # mistaken for a foreign process.
+    if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null \
+      | awk 'NR > 1 && tolower($1) !~ /node/ { foreign = 1 } END { exit !foreign }'; then
       show_error "Port $PORT is already in use by another process. Free the port or change TerminalOne's port."
       exit 1
     fi

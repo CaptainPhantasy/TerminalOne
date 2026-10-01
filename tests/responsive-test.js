@@ -92,6 +92,27 @@ async function waitForHealth(timeoutMs = 20000) {
   }
 }
 
+async function closePageSession(pg, timeoutMs = 3000) {
+  if (!pg.isClosed()) {
+    try {
+      await pg.evaluate(() => document.querySelector('#closeBtn')?.click());
+    } catch (_) { /* page may have failed before the UI initialized */ }
+    await pg.close();
+  }
+
+  const start = Date.now();
+  for (;;) {
+    try {
+      const health = JSON.parse((await get('/health')).body);
+      if (health.sessions === 0) return;
+    } catch (_) { /* retry until the cleanup deadline */ }
+    if (Date.now() - start > timeoutMs) {
+      throw new Error('browser page closed without cleaning up its TerminalOne session');
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 // Per-viewport: emulate an iPad, load the app, and measure overflow.
 async function checkViewport(browser, vp) {
   const pg = await browser.newPage();
@@ -177,7 +198,7 @@ async function checkViewport(browser, vp) {
     assert(fabM.fab.width >= 44 && fabM.fab.height >= 44, `${vp.name}: chrome toggle >=44pt (${Math.round(fabM.fab.width)}x${Math.round(fabM.fab.height)})`);
     assert(fabM.key && fabM.key.height >= 44, `${vp.name}: keybar key >=44pt tall (${Math.round(fabM.key.height)})`);
   } finally {
-    await pg.close();
+    await closePageSession(pg);
   }
 }
 
@@ -236,7 +257,7 @@ async function checkIphone(browser, vp) {
     assert(collapsed.keybarBottom <= collapsed.vh + 1, `${vp.name}: control bar within viewport when collapsed`);
     assert(collapsed.headerHidden, `${vp.name}: header hidden when collapsed (terminal gains space)`);
   } finally {
-    await pg.close();
+    await closePageSession(pg);
   }
 }
 
@@ -277,8 +298,9 @@ async function run() {
     }
 
     console.log('\nAll responsive layout checks passed!');
+    await browser.close();
+    browser = null;
     server.kill('SIGTERM');
-    process.exit(0);
   } catch (err) {
     console.error('\n✗ ' + (err && err.message ? err.message : err));
     try { if (browser) await browser.close(); } catch (_) {}
