@@ -32,7 +32,7 @@ export function init(T1) {
     if (!el) return;
     let startDist = 0;
     let startSize = current;
-    el.addEventListener('touchstart', (e) => {
+    function onTouchStart(e) {
       if (e.touches.length === 2) {
         startDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
@@ -40,8 +40,8 @@ export function init(T1) {
         );
         startSize = current;
       }
-    }, { passive: true });
-    el.addEventListener('touchmove', (e) => {
+    }
+    function onTouchMove(e) {
       if (e.touches.length === 2) {
         e.preventDefault();
         const dist = Math.hypot(
@@ -51,7 +51,13 @@ export function init(T1) {
         const ratio = dist / (startDist || 1);
         apply(Math.round(startSize * ratio));
       }
-    }, { passive: false });
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+    };
   });
 
   // Make sure the initial persisted zoom is applied after term is ready.
