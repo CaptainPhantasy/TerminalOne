@@ -1,11 +1,16 @@
 {
   "name": "terminalone",
-  "version": "1.0.0",
-  "description": "A browser-based terminal emulator — your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
+  "version": "1.0.1",
+  "description": "A browser-based terminal emulator \u2014 your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
   "license": "MIT",
-  "repository": "github:CaptainPhantasy/TerminalOne",
-  "homepage": "https://github.com/CaptainPhantasy/TerminalOne#readme",
-  "bugs": "https://github.com/CaptainPhantasy/TerminalOne/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CaptainPhantasy/TerminalOne.git"
+  },
+  "homepage": "https://floyd-labs-proving-ground.captainphantasy.chatgpt.site/open-source",
+  "bugs": {
+    "url": "https://github.com/CaptainPhantasy/TerminalOne/issues"
+  },
   "keywords": [
     "terminal",
     "emulator",
@@ -23,13 +28,15 @@
     "dev": "scripts/node-runtime.sh exec src/server.js",
     "doctor": "scripts/node-runtime.sh doctor",
     "repair": "scripts/node-runtime.sh repair",
-    "test": "bash tests/hooks.test.sh && scripts/node-runtime.sh exec tests/input-guard.test.mjs && scripts/node-runtime.sh exec tests/smoke-test.js && scripts/node-runtime.sh exec tests/feature-test.js && scripts/node-runtime.sh exec tests/feature-behavior-test.js && scripts/node-runtime.sh exec tests/voice-input.test.js && scripts/node-runtime.sh exec tests/responsive-test.js",
+    "test": "npm run test:security && bash tests/hooks.test.sh && scripts/node-runtime.sh exec tests/input-guard.test.mjs && scripts/node-runtime.sh exec tests/smoke-test.js && scripts/node-runtime.sh exec tests/feature-test.js && scripts/node-runtime.sh exec tests/feature-behavior-test.js && scripts/node-runtime.sh exec tests/voice-input.test.js && scripts/node-runtime.sh exec tests/responsive-test.js",
     "test:unit": "scripts/node-runtime.sh exec tests/input-guard.test.mjs",
     "test:smoke": "scripts/node-runtime.sh exec tests/smoke-test.js",
     "test:features": "scripts/node-runtime.sh exec tests/feature-test.js",
     "test:behavior": "scripts/node-runtime.sh exec tests/feature-behavior-test.js",
     "test:voice": "scripts/node-runtime.sh exec tests/voice-input.test.js",
-    "test:responsive": "scripts/node-runtime.sh exec tests/responsive-test.js"
+    "test:responsive": "scripts/node-runtime.sh exec tests/responsive-test.js",
+    "postinstall": "sh scripts/prepare-native.sh",
+    "test:security": "node --test tests/request-boundary.test.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
@@ -46,5 +53,18 @@
   },
   "engines": {
     "node": ">=22 <23"
-  }
+  },
+  "files": [
+    "src/",
+    "public/",
+    "scripts/node-runtime.sh",
+    "scripts/prepare-native.sh",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md",
+    "CHANGELOG.md",
+    "assets/",
+    "npm-shrinkwrap.json"
+  ],
+  "author": "Floyd's Labs"
 }

@@ -14,6 +14,8 @@ const { v4: uuidv4 } = require('uuid');
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 11001;
+const HOST = '127.0.0.1';
+const { isTrustedRequest } = require('./request-boundary');
 const MAX_CONCURRENT_SESSIONS = 10;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 5_000;
@@ -617,6 +619,12 @@ function bindWsToSession(ws, session) {
 // ─── Express app ────────────────────────────────────────────────────────────
 
 const app = express();
+app.use((req, res, next) => {
+  if (!isTrustedRequest(req, PORT)) return res.status(403).json({ error: 'TerminalOne accepts local, same-origin requests only.' });
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  next();
+});
 // App assets are served with no-store so the browser always runs the latest
 // frontend (critical during input/dictation iteration — a cached input-guard.mjs
 // silently reproduces already-fixed echo bugs).
@@ -651,7 +659,7 @@ app.post('/admin/sessions/:id/kill', (req, res) => {
 // ─── HTTP + WebSocket server ────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, verifyClient: ({ req }) => isTrustedRequest(req, PORT) });
 
 wss.on('connection', (ws) => {
   // Each connection starts as a fresh placeholder session. It becomes "real"
@@ -695,6 +703,6 @@ async function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   info(null, `TerminalOne running at http://localhost:${PORT}`, { maxSessions: MAX_CONCURRENT_SESSIONS });
 });

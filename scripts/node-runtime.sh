@@ -27,6 +27,7 @@ verify_native_modules() {
 require('node-pty');
 NODE
   ) >/dev/null 2>&1 || return 1
+  [ "$(uname -s)" != "Darwin" ] && return 0
   local helper found=false
   for helper in "$ROOT"/node_modules/node-pty/prebuilds/*/spawn-helper; do
     [ -e "$helper" ] || continue
