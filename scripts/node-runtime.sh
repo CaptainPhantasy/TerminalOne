@@ -20,7 +20,8 @@ resolve_node() {
 }
 
 NODE_BIN="$(resolve_node)"
-export PATH="$(dirname "$NODE_BIN"):$PATH"
+PATH="$(dirname "$NODE_BIN"):$PATH"
+export PATH
 
 verify_native_modules() {
   (cd "$ROOT" && "$NODE_BIN" - <<'NODE'
