@@ -16,6 +16,11 @@
  *      • Word-by-word partials followed by full-phrase finalization — the
  *        accumulated buffer contains the full phrase, so finalization is
  *        suppressed.
+ *  - Events of 1-3 characters are always sent. They are keystrokes, not
+ *    dictation: a platform can deliver several keys in one event, and such a
+ *    burst is never a re-send of text already on the line. Treating it as one
+ *    silently dropped real keystrokes whose letters appeared earlier in the
+ *    line (the "type it twice" bug on long messages).
  *  - Control sequences reset the buffer and are sent immediately.
  *  - The rolling buffer is capped (default 256 chars) and entries expire after
  *    `bufferDedupeMs` (default 3000ms) so legitimate paste/type of previously
@@ -69,8 +74,15 @@ export class InputGuard {
 
     const bufferFresh = this._sentBuffer && now - this._bufferTime < this._bufferDedupeMs;
 
+    // A 1-3 character event is typing, not dictation: platforms deliver several
+    // keys in one event (IME, predictive keyboards, fast input on iOS), and a
+    // burst of new keys is never a re-send of text already on the line.
+    // Subtracting such a burst against the rolling buffer silently ate real
+    // keystrokes whose letters already appeared earlier in the line.
+    const isTypingBurst = data.length <= 3;
+
     // Case 1: data is entirely contained in recent buffer → already sent.
-    if (bufferFresh && this._sentBuffer.includes(data)) {
+    if (bufferFresh && !isTypingBurst && this._sentBuffer.includes(data)) {
       return;
     }
 
@@ -85,8 +97,9 @@ export class InputGuard {
     }
 
     // Case 3: data overlaps the tail of the buffer → send only the new suffix
-    // (suffix revision: "hello world" → "world peace").
-    if (bufferFresh) {
+    // (suffix revision: "hello world" → "world peace"). Typing bursts are
+    // exempt: subtracting an overlap would drop keys the user just pressed.
+    if (bufferFresh && !isTypingBurst) {
       const overlap = this._longestTailOverlap(this._sentBuffer, data);
       if (overlap > 0) {
         const delta = data.slice(overlap);

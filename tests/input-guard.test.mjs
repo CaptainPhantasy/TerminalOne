@@ -191,6 +191,39 @@ async function run() {
     g.dispose();
   });
 
+  // ── Regression: keystrokes eaten on long messages ────────────────────────
+  // Reported defect: "when messages start to get long ... all key strokes have
+  // to be entered twice". A platform delivers several keys in one event (IME,
+  // predictive keyboard, fast iOS input). The substring/overlap subtraction
+  // then treated such a burst as text it had already sent — so once the line
+  // contained the same letters, the burst was dropped and the keys vanished.
+
+  await test('2-key burst whose letters appear earlier in the line is still sent', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the thing is') g.onData(ch);
+    g.onData('th');           // two keys landing in one input event
+    g.onData(' t');           // space + t, both already in the line
+    assert.strictEqual(sent.join(''), 'the thing is' + 'th' + ' t', 'keystroke burst swallowed by earlier text');
+    g.dispose();
+  });
+
+  await test('3-key burst past the tail of the line is not truncated', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the quick brown') g.onData(ch);
+    g.onData('own');          // overlaps the last three chars of "brown"
+    assert.strictEqual(sent.join(''), 'the quick brown' + 'own', 'overlap subtraction ate typed keys');
+    g.dispose();
+  });
+
+  await test('dictation finalization still suppressed after the burst fix', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the thing is ') g.onData(ch);
+    g.onData('the thing is that');   // cumulative dictation partial
+    g.onData('the thing is that');   // compositionend re-fire
+    assert.strictEqual(sent.join(''), 'the thing is that', 'long phrase sent twice');
+    g.dispose();
+  });
+
   console.log('\nAll input-guard tests passed!');
 }
 
