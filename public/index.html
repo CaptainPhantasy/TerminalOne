@@ -395,7 +395,7 @@
   import { Terminal } from '/node_modules/@xterm/xterm/lib/xterm.mjs';
   import { FitAddon } from '/node_modules/@xterm/addon-fit/lib/addon-fit.mjs';
  import { WebLinksAddon } from '/node_modules/@xterm/addon-web-links/lib/addon-web-links.mjs';
- import { InputGuard } from './input-guard.mjs';
+ import { InputGuard, bindInputGuard } from './input-guard.mjs';
 
   // ── Theme catalog ─────────────────────────────────────────────────────────
   const THEMES = {
@@ -960,7 +960,7 @@
   // Expose the sender to the on-screen key bar (outside this closure).
   sendInputFn = (data) => guard.send(data);
 
-  addTerminalResource(term.onData((data) => guard.onData(data)));
+  addTerminalResource(bindInputGuard(term, guard));
 
    addTerminalResource(term.onResize(({ cols, rows }) => {
     if (ws && ws.readyState === WebSocket.OPEN) {

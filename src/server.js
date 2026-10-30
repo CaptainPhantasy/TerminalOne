@@ -15,7 +15,8 @@ const { v4: uuidv4 } = require('uuid');
 
 const PORT = process.env.PORT || 11001;
 const HOST = '127.0.0.1';
-const { isTrustedRequest } = require('./request-boundary');
+const { createRequestBoundary } = require('./request-boundary');
+const isTrustedRequest = createRequestBoundary(PORT, process.env.TERMINALONE_TRUSTED_ORIGINS || '');
 const MAX_CONCURRENT_SESSIONS = 10;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 5_000;
@@ -620,7 +621,7 @@ function bindWsToSession(ws, session) {
 
 const app = express();
 app.use((req, res, next) => {
-  if (!isTrustedRequest(req, PORT)) return res.status(403).json({ error: 'TerminalOne accepts local, same-origin requests only.' });
+  if (!isTrustedRequest(req)) return res.status(403).json({ error: 'This address or request origin is not allowed. Use the local address or a configured authenticated HTTPS proxy.' });
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
   next();
@@ -659,7 +660,7 @@ app.post('/admin/sessions/:id/kill', (req, res) => {
 // ─── HTTP + WebSocket server ────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, verifyClient: ({ req }) => isTrustedRequest(req, PORT) });
+const wss = new WebSocket.Server({ server, verifyClient: ({ req }) => isTrustedRequest(req) });
 
 wss.on('connection', (ws) => {
   // Each connection starts as a fresh placeholder session. It becomes "real"

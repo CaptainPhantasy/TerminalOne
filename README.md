@@ -24,6 +24,16 @@ npm start
 
 Open `http://localhost:11001`. The server binds to `127.0.0.1` and rejects untrusted Host headers and cross-site HTTP/WebSocket origins. A terminal can run commands with your account's permissions. Keep it local. Network access requires a separately configured authenticated tunnel or proxy; the package does not provide remote authentication.
 
+### Connect from a tablet or phone
+
+First configure an HTTPS tunnel or proxy that requires you to sign in before it forwards **any** request, including WebSocket connections. Then start TerminalOne with its exact public address:
+
+```sh
+TERMINALONE_TRUSTED_ORIGINS=https://terminal.example.com npm start
+```
+
+Open that address on your tablet or phone and sign in through your proxy. The proxy must forward to `http://127.0.0.1:11001`, preserve the public `Host` header and browser `Origin`, and support WebSocket upgrades. Separate multiple allowed HTTPS addresses with commas. Wildcards and plain HTTP remote addresses are rejected. The server still listens only on this computer; this setting allows an address and does not add a sign-in system. With no setting, only local addresses are allowed. Use `TERMINALONE_HEALTH_URL=http://localhost:11001/health` with `t1` when its browser URL points through a sign-in page.
+
 Session resume keeps detached shells for up to five minutes. Browser settings persist locally. Voice transcription is optional and requires a compatible external STT command; it is not a bundled speech model. If a native module needs repair, run `npm run repair`.
 
 ## What is in the box

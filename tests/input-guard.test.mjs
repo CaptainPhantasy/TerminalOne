@@ -224,6 +224,88 @@ async function run() {
     g.dispose();
   });
 
+  await test('short dictation finalization is suppressed after an interleaved space', () => {
+    for (const phrase of ['ls', 'pwd']) {
+      const { g, sent } = makeGuard();
+      g.onData(phrase);
+      g.onData(' ');
+      g.onData(phrase);
+      assert.strictEqual(sent.join(''), phrase + ' ');
+    }
+  });
+
+  await test('known keyboard input preserves repeated bursts of every length', () => {
+    for (const text of ['ab', 'pwd', 'echo', 'hello world', '🐈']) {
+      const { g, sent } = makeGuard();
+      g.onData(text, { source: 'keyboard' });
+      g.onData(text, { source: 'keyboard' });
+      assert.strictEqual(sent.join(''), text + text);
+    }
+  });
+
+  await test('known keyboard input preserves cumulative-looking bursts and repeated commands', () => {
+    const { g, sent } = makeGuard();
+    for (const text of ['x', 'xy', 'ls', ' ', 'ls']) {
+      g.onData(text, { source: 'keyboard' });
+    }
+    assert.strictEqual(sent.join(''), 'xxyls ls');
+  });
+
+  await test('paste is never deduplicated against previous input', () => {
+    const { g, sent } = makeGuard();
+    g.onData('hello world');
+    g.onData('hello world', { source: 'paste' });
+    assert.strictEqual(sent.join(''), 'hello worldhello world');
+  });
+
+  await test('single-character dictation partials refresh the window after a long session', () => {
+    const { g, sent } = makeGuard();
+    let now = 10000;
+    g._now = () => now;
+    for (const ch of 'hello') { g.onData(ch); now += 10; }
+    g.onData('hello world');
+    assert.strictEqual(sent.join(''), 'hello world');
+  });
+
+  await test('expired text is not joined to a new dictation partial', () => {
+    const { g, sent } = makeGuard();
+    let now = 10000;
+    g._now = () => now;
+    g.onData('old');
+    now += 4000;
+    g.onData('n');
+    g.onData('new');
+    assert.strictEqual(sent.join(''), 'oldnew');
+  });
+
+  await test('repeated control keys and input after a deliberate key are never swallowed', () => {
+    const { g, sent } = makeGuard();
+    g.onData('\u001b[A');
+    g.onData('\u001b[A');
+    g.onData('hello');
+    g.send('\r');
+    g.onData('hello');
+    assert.strictEqual(sent.join(''), '\u001b[A\u001b[Ahello\rhello');
+  });
+
+  await test('separate compositions can deliberately repeat the same phrase', () => {
+    const { g, sent } = makeGuard();
+    for (let i = 0; i < 2; i++) {
+      g.beginComposition();
+      g.onData('ls', { source: 'composition' });
+      g.onData('ls');
+    }
+    assert.strictEqual(sent.join(''), 'lsls');
+  });
+
+  await test('backspace clears the previous dictation baseline', () => {
+    const { g, sent } = makeGuard();
+    g.onData('hello');
+    g.onData('\u007f');
+    g.onData('hello');
+    assert.strictEqual(sent.join(''), 'hello\u007fhello');
+  });
+
   console.log('\nAll input-guard tests passed!');
 }
 
