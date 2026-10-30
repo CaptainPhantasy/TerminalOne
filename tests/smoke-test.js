@@ -143,22 +143,22 @@ async function run() {
 
     // Exercise the real xterm input listener and the guard's browser event
     // binding. Capture input frames so test text cannot execute in the shell.
-    await pg.waitForFunction('window.__terminalOne.ws?.readyState === WebSocket.OPEN');
+    await pg.waitForSelector('#status.connected');
     const typed = await pg.evaluate(() => {
-      const { term, ws } = window.__terminalOne;
+      const textarea = document.querySelector('.xterm-helper-textarea');
       const sent = [];
-      const send = ws.send;
-      ws.send = function (raw) {
+      const send = WebSocket.prototype.send;
+      WebSocket.prototype.send = function (raw) {
         const msg = JSON.parse(raw);
         if (msg.type === 'input') sent.push(msg.data);
         else send.call(this, raw);
       };
       try {
         for (const data of ['x', 'xy', 'echo', 'echo', 'ls', ' ', 'ls', '🐈', '🐈']) {
-          term.textarea.dispatchEvent(new InputEvent('input', { data, inputType: 'insertText', bubbles: true }));
+          textarea.dispatchEvent(new InputEvent('input', { data, inputType: 'insertText', bubbles: true }));
         }
         return sent.join('');
-      } finally { ws.send = send; }
+      } finally { WebSocket.prototype.send = send; }
     });
     assert(typed === 'xxyechoechols ls🐈🐈', 'real browser input preserves repeated and cumulative-looking keyboard bursts');
 
