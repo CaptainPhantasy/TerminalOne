@@ -191,6 +191,121 @@ async function run() {
     g.dispose();
   });
 
+  // ── Regression: keystrokes eaten on long messages ────────────────────────
+  // Reported defect: "when messages start to get long ... all key strokes have
+  // to be entered twice". A platform delivers several keys in one event (IME,
+  // predictive keyboard, fast iOS input). The substring/overlap subtraction
+  // then treated such a burst as text it had already sent — so once the line
+  // contained the same letters, the burst was dropped and the keys vanished.
+
+  await test('2-key burst whose letters appear earlier in the line is still sent', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the thing is') g.onData(ch);
+    g.onData('th');           // two keys landing in one input event
+    g.onData(' t');           // space + t, both already in the line
+    assert.strictEqual(sent.join(''), 'the thing is' + 'th' + ' t', 'keystroke burst swallowed by earlier text');
+    g.dispose();
+  });
+
+  await test('3-key burst past the tail of the line is not truncated', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the quick brown') g.onData(ch);
+    g.onData('own');          // overlaps the last three chars of "brown"
+    assert.strictEqual(sent.join(''), 'the quick brown' + 'own', 'overlap subtraction ate typed keys');
+    g.dispose();
+  });
+
+  await test('dictation finalization still suppressed after the burst fix', async () => {
+    const { g, sent } = makeGuard();
+    for (const ch of 'the thing is ') g.onData(ch);
+    g.onData('the thing is that');   // cumulative dictation partial
+    g.onData('the thing is that');   // compositionend re-fire
+    assert.strictEqual(sent.join(''), 'the thing is that', 'long phrase sent twice');
+    g.dispose();
+  });
+
+  await test('short dictation finalization is suppressed after an interleaved space', () => {
+    for (const phrase of ['ls', 'pwd']) {
+      const { g, sent } = makeGuard();
+      g.onData(phrase);
+      g.onData(' ');
+      g.onData(phrase);
+      assert.strictEqual(sent.join(''), phrase + ' ');
+    }
+  });
+
+  await test('known keyboard input preserves repeated bursts of every length', () => {
+    for (const text of ['ab', 'pwd', 'echo', 'hello world', '🐈']) {
+      const { g, sent } = makeGuard();
+      g.onData(text, { source: 'keyboard' });
+      g.onData(text, { source: 'keyboard' });
+      assert.strictEqual(sent.join(''), text + text);
+    }
+  });
+
+  await test('known keyboard input preserves cumulative-looking bursts and repeated commands', () => {
+    const { g, sent } = makeGuard();
+    for (const text of ['x', 'xy', 'ls', ' ', 'ls']) {
+      g.onData(text, { source: 'keyboard' });
+    }
+    assert.strictEqual(sent.join(''), 'xxyls ls');
+  });
+
+  await test('paste is never deduplicated against previous input', () => {
+    const { g, sent } = makeGuard();
+    g.onData('hello world');
+    g.onData('hello world', { source: 'paste' });
+    assert.strictEqual(sent.join(''), 'hello worldhello world');
+  });
+
+  await test('single-character dictation partials refresh the window after a long session', () => {
+    const { g, sent } = makeGuard();
+    let now = 10000;
+    g._now = () => now;
+    for (const ch of 'hello') { g.onData(ch); now += 10; }
+    g.onData('hello world');
+    assert.strictEqual(sent.join(''), 'hello world');
+  });
+
+  await test('expired text is not joined to a new dictation partial', () => {
+    const { g, sent } = makeGuard();
+    let now = 10000;
+    g._now = () => now;
+    g.onData('old');
+    now += 4000;
+    g.onData('n');
+    g.onData('new');
+    assert.strictEqual(sent.join(''), 'oldnew');
+  });
+
+  await test('repeated control keys and input after a deliberate key are never swallowed', () => {
+    const { g, sent } = makeGuard();
+    g.onData('\u001b[A');
+    g.onData('\u001b[A');
+    g.onData('hello');
+    g.send('\r');
+    g.onData('hello');
+    assert.strictEqual(sent.join(''), '\u001b[A\u001b[Ahello\rhello');
+  });
+
+  await test('separate compositions can deliberately repeat the same phrase', () => {
+    const { g, sent } = makeGuard();
+    for (let i = 0; i < 2; i++) {
+      g.beginComposition();
+      g.onData('ls', { source: 'composition' });
+      g.onData('ls');
+    }
+    assert.strictEqual(sent.join(''), 'lsls');
+  });
+
+  await test('backspace clears the previous dictation baseline', () => {
+    const { g, sent } = makeGuard();
+    g.onData('hello');
+    g.onData('\u007f');
+    g.onData('hello');
+    assert.strictEqual(sent.join(''), 'hello\u007fhello');
+  });
+
   console.log('\nAll input-guard tests passed!');
 }
 

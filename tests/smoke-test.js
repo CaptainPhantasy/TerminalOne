@@ -141,6 +141,58 @@ async function run() {
     assert(persisted.theme === 'gruvbox', 'theme persists across reload (gruvbox)');
     assert(persisted.style === 'floyd', 'style persists across reload (floyd)');
 
+    // Exercise the real xterm input listener and the guard's browser event
+    // binding. Capture input frames so test text cannot execute in the shell.
+    await pg.waitForSelector('#status.connected');
+    const typed = await pg.evaluate(() => {
+      const textarea = document.querySelector('.xterm-helper-textarea');
+      const sent = [];
+      const send = WebSocket.prototype.send;
+      WebSocket.prototype.send = function (raw) {
+        const msg = JSON.parse(raw);
+        if (msg.type === 'input') sent.push(msg.data);
+        else send.call(this, raw);
+      };
+      try {
+        for (const data of ['x', 'xy', 'echo', 'echo', 'ls', ' ', 'ls', '🐈', '🐈']) {
+          textarea.dispatchEvent(new InputEvent('input', { data, inputType: 'insertText', bubbles: true }));
+        }
+        return sent.join('');
+      } finally { WebSocket.prototype.send = send; }
+    });
+    assert(typed === 'xxyechoechols ls🐈🐈', 'real browser input preserves repeated and cumulative-looking keyboard bursts');
+
+    const guarded = await pg.evaluate(async () => {
+      const { InputGuard, bindInputGuard } = await import('/input-guard.mjs');
+      const sent = [];
+      const element = document.createElement('div');
+      const textarea = element.appendChild(document.createElement('textarea'));
+      let receive;
+      const term = { element, onData(fn) { receive = fn; return { dispose() { receive = null; } }; } };
+      const dispose = bindInputGuard(term, new InputGuard({ send: (data) => sent.push(data) }));
+      const emit = (event, data) => {
+        textarea.addEventListener(event.type, () => receive?.(data), { once: true });
+        textarea.dispatchEvent(event);
+      };
+      emit(new KeyboardEvent('keydown', { bubbles: true }), 'echo');
+      emit(new KeyboardEvent('keydown', { bubbles: true }), 'echo');
+      emit(new Event('paste', { bubbles: true }), 'echo');
+      textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      emit(new InputEvent('input', { bubbles: true, isComposing: true }), 'ls');
+      emit(new InputEvent('input', { bubbles: true, isComposing: true }), ' ');
+      textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      receive('ls');
+      textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+      emit(new InputEvent('input', { bubbles: true, isComposing: true }), 'ls');
+      textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+      receive('ls');
+      dispose();
+      return { text: sent.join(''), disposed: receive === null };
+    });
+    assert(guarded.text === 'echoechoechols ls', 'short dictation finalizes once per composition while typing and paste remain intact');
+    assert(guarded.disposed, 'browser input binding releases its terminal subscription');
+
     await browser.close();
     browser = null;
 

@@ -28,15 +28,15 @@
     "dev": "scripts/node-runtime.sh exec src/server.js",
     "doctor": "scripts/node-runtime.sh doctor",
     "repair": "scripts/node-runtime.sh repair",
-    "test": "npm run test:security && bash tests/hooks.test.sh && scripts/node-runtime.sh exec tests/input-guard.test.mjs && scripts/node-runtime.sh exec tests/smoke-test.js && scripts/node-runtime.sh exec tests/feature-test.js && scripts/node-runtime.sh exec tests/feature-behavior-test.js && scripts/node-runtime.sh exec tests/voice-input.test.js && scripts/node-runtime.sh exec tests/responsive-test.js",
-    "test:unit": "scripts/node-runtime.sh exec tests/input-guard.test.mjs",
+    "test": "npm run test:security && bash tests/hooks.test.sh && npm run test:unit && scripts/node-runtime.sh exec tests/smoke-test.js && scripts/node-runtime.sh exec tests/feature-test.js && scripts/node-runtime.sh exec tests/feature-behavior-test.js && scripts/node-runtime.sh exec tests/voice-input.test.js && scripts/node-runtime.sh exec tests/responsive-test.js",
+    "test:unit": "scripts/node-runtime.sh exec tests/input-guard.test.mjs && node --test tests/service-worker.test.js",
     "test:smoke": "scripts/node-runtime.sh exec tests/smoke-test.js",
     "test:features": "scripts/node-runtime.sh exec tests/feature-test.js",
     "test:behavior": "scripts/node-runtime.sh exec tests/feature-behavior-test.js",
     "test:voice": "scripts/node-runtime.sh exec tests/voice-input.test.js",
     "test:responsive": "scripts/node-runtime.sh exec tests/responsive-test.js",
     "postinstall": "sh scripts/prepare-native.sh",
-    "test:security": "node --test tests/request-boundary.test.js"
+    "test:security": "node --test tests/request-boundary.test.js tests/request-boundary-integration.test.js"
   },
   "dependencies": {
     "@xterm/addon-fit": "^0.11.0",
