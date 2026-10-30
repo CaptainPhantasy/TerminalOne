@@ -687,6 +687,7 @@
    tab: '\t',
    enter: '\r',
    del: '\x7f',
+   ctrlB: '\x02',
    up: '\x1b[A', down: '\x1b[B', right: '\x1b[C', left: '\x1b[D',
    home: '\x1b[H', end: '\x1b[F', pgup: '\x1b[5~', pgdn: '\x1b[6~'
   };
@@ -786,6 +787,7 @@
      makeKey('ESC', { seq: SEQ.esc, title: 'Escape' }),
      makeKey('TAB', { seq: SEQ.tab, title: 'Tab' }),
      makeKey('ENTER', { seq: SEQ.enter, title: 'Enter' }),
+     makeKey('Ctrl+b', { seq: SEQ.ctrlB, title: 'Send Ctrl+b to herdr' }),
      makeKey('CTRL', { kind: 'toggle', mod: 'ctrl', title: 'Ctrl (sticky)' })
     ]));
     iphone.appendChild(makeGroup([
@@ -809,6 +811,7 @@
      makeKey('ESC', { seq: SEQ.esc, title: 'Escape' }),
      makeKey('TAB', { seq: SEQ.tab, title: 'Tab' }),
      makeKey('ENTER', { seq: SEQ.enter, title: 'Enter' }),
+     makeKey('Ctrl+b', { seq: SEQ.ctrlB, title: 'Send Ctrl+b to herdr' }),
      makeKey('CTRL', { kind: 'toggle', mod: 'ctrl', title: 'Ctrl (sticky)' }),
      makeKey('ALT', { kind: 'toggle', mod: 'alt', title: 'Alt / Meta (sticky)' })
     ]));

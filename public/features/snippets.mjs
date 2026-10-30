@@ -43,6 +43,9 @@ export function init(T1) {
 
   function render() {
     row.innerHTML = '';
+    const ctrlB = T1.ui.makeButton('Ctrl+b', 'Send Ctrl+b to herdr', () => T1.sendData('\x02'));
+    ctrlB.classList.add('t1snip-chip');
+    row.appendChild(ctrlB);
     for (const cmd of PRESETS) {
       const chip = T1.ui.makeButton(cmd, `Insert: ${cmd}`, () => T1.sendData(cmd));
       chip.classList.add('t1snip-chip');
