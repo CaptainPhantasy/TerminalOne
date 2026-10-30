@@ -223,6 +223,7 @@ async function checkIphone(browser, vp) {
         fab: r(document.querySelector('.t1-chrome-fab')),
         keybar: r(document.querySelector('#keybarIphone')),
         key: r(document.querySelector('#keybarIphone .kb-key')),
+        ctrlB: r(Array.from(document.querySelectorAll('#keybarIphone .kb-key')).find((b) => b.textContent === 'Ctrl+b')),
         footer: r(document.querySelector('.terminal-footer')),
         docScrollW: document.documentElement.scrollWidth,
         docScrollH: document.documentElement.scrollHeight
@@ -239,6 +240,7 @@ async function checkIphone(browser, vp) {
     // R3: 44pt touch targets.
     assert(m.fab.width >= 44 && m.fab.height >= 44, `${vp.name}: chrome toggle >=44pt (${Math.round(m.fab.width)}x${Math.round(m.fab.height)})`);
     assert(m.key && m.key.height >= 44, `${vp.name}: keybar key >=44pt tall (${Math.round(m.key.height)})`);
+    assert(m.ctrlB && m.ctrlB.width >= 44 && m.ctrlB.height >= 44 && m.ctrlB.left >= 0 && m.ctrlB.right <= m.vw, `${vp.name}: Ctrl+b is a full-size tap target visible without scrolling`);
     // R2: control bar visible + within viewport.
     assert(m.keybar && m.keybar.display === 'flex', `${vp.name}: control bar (keybar) visible`);
     assert(m.keybar.bottom <= m.vh + 1, `${vp.name}: control bar within viewport (bottom=${Math.round(m.keybar.bottom)} ≤ ${m.vh})`);

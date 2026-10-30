@@ -107,6 +107,41 @@ async function run() {
       return pg;
     }
 
+    async function verifyCtrlB(pg, barId) {
+      await pg.waitForSelector('#status.connected');
+      await pg.waitForFunction(() => Array.from(document.querySelectorAll('.t1snip-chip')).some((b) => b.textContent === 'Ctrl+b'));
+      const result = await pg.evaluate((id) => {
+        const bar = document.getElementById(id);
+        const shortcut = Array.from(bar.querySelectorAll('button')).find((b) => b.textContent === 'Ctrl+b');
+        const snippet = Array.from(document.querySelectorAll('.t1snip-chip')).find((b) => b.textContent === 'Ctrl+b');
+        if (!shortcut || !snippet) return { missing: true };
+        const frames = [];
+        const originalSend = WebSocket.prototype.send;
+        WebSocket.prototype.send = function (raw) {
+          const message = JSON.parse(raw);
+          if (message.type === 'input') frames.push(message.data);
+          else originalSend.call(this, raw);
+        };
+        try {
+          bar.querySelector('[data-mod="ctrl"]').click();
+          shortcut.click();
+          bar.querySelector('[data-mod="alt"]')?.click();
+          shortcut.click();
+          const activeModifiers = bar.querySelectorAll('.toggle.active').length;
+          const toggle = Array.from(document.querySelectorAll('#t1toolbar button')).find((b) => b.textContent === 'Snippets');
+          toggle.click();
+          const snippetVisible = getComputedStyle(snippet.parentElement).display !== 'none';
+          snippet.click();
+          snippet.click();
+          return { frames, activeModifiers, snippetVisible };
+        } finally { WebSocket.prototype.send = originalSend; }
+      }, barId);
+      assert(!result.missing, `${barId}: Ctrl+b key and snippet exist`);
+      assert(JSON.stringify(result.frames) === JSON.stringify(['\x02', '\x02', '\x02', '\x02']), `${barId}: each Ctrl+b tap sends exactly one Control+b byte, with no Enter or literal b`);
+      assert(result.activeModifiers === 0, `${barId}: shortcut clears sticky Ctrl/Alt`);
+      assert(result.snippetVisible, `${barId}: Ctrl+b snippet is visible after opening Snippets`);
+    }
+
     // Desktop UA (puppeteer default).
     const desktop = await loadPage(null);
     const dInfo = await desktop.evaluate(() => ({
@@ -138,7 +173,9 @@ async function run() {
     assert(iInfo.labels.includes('ENTER'), 'iPhone bar includes ENTER');
     assert(iInfo.labels.includes('ESC'), 'iPhone bar includes ESC');
     assert(iInfo.labels.includes('CTRL'), 'iPhone bar includes CTRL');
+    assert(iInfo.labels.includes('Ctrl+b'), 'iPhone bar includes one-tap herdr shortcut');
     assert(iInfo.labels.includes('↑'), 'iPhone bar includes arrow up');
+    await verifyCtrlB(iphone, 'keybarIphone');
     await iphone.close();
 
     // iPad UA (desktop-style on iPadOS 13+).
@@ -166,6 +203,7 @@ async function run() {
     assert(iPadInfo.labels.includes('ALT'), 'iPad bar includes ALT');
     assert(iPadInfo.labels.includes('HOME'), 'iPad bar includes HOME');
     assert(iPadInfo.labels.includes('DEL'), 'iPad bar includes DEL');
+    await verifyCtrlB(ipad, 'keybarIpad');
 
     // Touch-scroll handler attachment: two-finger touch should be wired.
     const touch = await ipad.evaluate(() => {

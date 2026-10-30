@@ -2,6 +2,10 @@
 
 All notable changes to TerminalOne.
 
+## Unreleased
+
+- Added a one-tap **Ctrl+b** shortcut for herdr to the iPhone/iPad key bar and the Snippets row. It sends Control plus lowercase b immediately, without switching keyboards or pressing Enter.
+
 ## [1.0.0] — 2026-06-26
 
 ### Initial public release

@@ -36,6 +36,8 @@ Open that address on your tablet or phone and sign in through your proxy. The pr
 
 Session resume keeps detached shells for up to five minutes. Browser settings persist locally. Voice transcription is optional and requires a compatible external STT command; it is not a bundled speech model. If a native module needs repair, run `npm run repair`.
 
+For herdr on iPhone or iPad, tap **Ctrl+b** in the bottom key bar to send Control plus lowercase b immediately. You can also open **Snippets** and tap **Ctrl+b** there. No keyboard switch or Enter press is needed.
+
 ## What is in the box
 
 The release includes `terminalone-1.0.1.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.
