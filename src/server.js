@@ -18,6 +18,11 @@ const HOST = '127.0.0.1';
 const { createRequestBoundary } = require('./request-boundary');
 const isTrustedRequest = createRequestBoundary(PORT, process.env.TERMINALONE_TRUSTED_ORIGINS || '');
 const MAX_CONCURRENT_SESSIONS = 10;
+
+// Input typed in the moment between the socket opening and the shell existing
+// used to be discarded without a word, which read as "my typing does not work"
+// until the user pressed the key again. Hold it instead and flush on spawn.
+const MAX_PENDING_INPUT = 8192;
 const PING_INTERVAL_MS = 30_000;
 const PONG_TIMEOUT_MS = 5_000;
 const KILL_GRACE_MS = 1_000;
@@ -31,6 +36,14 @@ const STT_TIMEOUT_MS = Number(process.env.TERMINALONE_STT_TIMEOUT_MS || 60_000);
 // client can reconnect to the same session. Output produced while detached
 // (and while attached) is buffered in a ring and replayed on resume.
 const RESUME_GRACE_MS = 5 * 60 * 1000;
+
+// A shell that cannot start exits immediately. Respawning it without a limit
+// produced roughly 26 respawns per second, indefinitely, and looked like a
+// frozen terminal. Count rapid exits, back off, then stop and explain.
+const RAPID_EXIT_MS = 1500;
+const MAX_RAPID_RESPAWNS = 5;
+const RESPAWN_BASE_MS = 100;
+const RESPAWN_MAX_MS = 5000;
 const RESUME_BUFFER_MAX = 512 * 1024;
 
 // ─── In-memory state ──────────────────────────────────────────────────────────
@@ -198,7 +211,10 @@ function wirePtyToSession(ptyProcess, session) {
   ptyProcess.once('exit', (code) => {
     if (session.processExited) return;
     session.processExited = true;
-    info(id, 'Shell exited, respawning', { code });
+
+    const ranFor = session.startedAt ? Date.now() - session.startedAt : Infinity;
+    session.rapidExits = ranFor < RAPID_EXIT_MS ? (session.rapidExits || 0) + 1 : 0;
+    info(id, 'Shell exited', { code, ranForMs: ranFor, rapidExits: session.rapidExits });
 
     // If detached when the shell exits, there is nobody to receive a respawn —
     // tear the session down.
@@ -208,15 +224,27 @@ function wirePtyToSession(ptyProcess, session) {
     }
     if (!session.sessionActive) { cleanupSession(session); return; }
 
+    // Stop rather than loop. Say what happened and what to check.
+    if (session.rapidExits >= MAX_RAPID_RESPAWNS) {
+      wsError(session.ws, 'SHELL_WILL_NOT_START',
+        'The shell exited immediately ' + session.rapidExits + ' times in a row, so it was '
+        + 'not restarted again. Check $SHELL (currently ' + (process.env.SHELL || '/bin/zsh')
+        + ') and your shell profile.', id);
+      cleanupSession(session);
+      return;
+    }
+
     try { session.ws.send(JSON.stringify({ type: 'shell-reset', code: code || 0 })); }
     catch (_) {}
+
+    const delay = Math.min(RESPAWN_BASE_MS * Math.pow(2, session.rapidExits), RESPAWN_MAX_MS);
     setTimeout(() => {
       if (session.sessionActive && session.ws && session.ws.readyState === WebSocket.OPEN) {
         spawnShell(session, session.shellCwd);
       } else {
         cleanupSession(session);
       }
-    }, 50);
+    }, delay);
   });
 
   ptyProcess.on('error', (err) => {
@@ -259,6 +287,14 @@ function spawnShell(session, cwd) {
   session.startedAt = Date.now();
   activeSessions.set(id, session);
   wirePtyToSession(ptyProcess, session);
+
+  // Deliver anything typed while this shell did not yet exist.
+  if (session.pendingInput) {
+    const queued = session.pendingInput;
+    session.pendingInput = '';
+    try { ptyProcess.write(queued); }
+    catch (e) { error(id, 'pending input flush failed', { err: e.message }); }
+  }
 }
 
 // ─── Resume: re-attach a new WebSocket to an existing session ────────────────
@@ -469,9 +505,16 @@ function handleMessage(session, ws, data) {
       break;
     }
     case 'input': {
-      if (session.ptyProcess && !session.processExited && typeof data.data === 'string') {
+      if (typeof data.data !== 'string') break;
+      if (session.ptyProcess && !session.processExited) {
         try { session.ptyProcess.write(data.data); }
         catch (e) { wsError(ws, 'WRITE_FAILED', `Write failed: ${e.message}`, session.id); }
+      } else {
+        // No shell yet: keep the keys rather than throwing them away.
+        const queued = (session.pendingInput || '') + data.data;
+        session.pendingInput = queued.length > MAX_PENDING_INPUT
+          ? queued.slice(-MAX_PENDING_INPUT)
+          : queued;
       }
       break;
     }

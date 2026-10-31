@@ -947,6 +947,7 @@
    term.open($('#terminal'));
    requestAnimationFrame(() => fitAddon.fit());
 
+
    addTerminalResource(initTouchScroll());
 
  // ── iOS dictation / typing guard ────────────────────────────────────────
@@ -964,6 +965,30 @@
   sendInputFn = (data) => guard.send(data);
 
   addTerminalResource(bindInputGuard(term, guard));
+
+   // Take focus on load where there is no touchscreen, so the very first
+   // keypress reaches the terminal. A tablet would get its on-screen keyboard
+   // opened uninvited, so those devices rely on the key-capture fallback above.
+   // (Headless Chrome reports a coarse pointer, so maxTouchPoints is the
+   // reliable signal here.)
+   if (!navigator.maxTouchPoints) {
+     requestAnimationFrame(() => { try { term.focus(); } catch (_) {} });
+   }
+
+   // A key typed while <body> has focus never reaches xterm, so the first press
+   // was silently discarded and the user had to press it again. Capture the
+   // first printable key at document level, focus the terminal, and deliver it.
+   // Focusing only happens when the user actually types, so a touch device does
+   // not have its on-screen keyboard opened for it.
+   document.addEventListener('keydown', (event) => {
+     const el = document.activeElement;
+     if (el && el !== document.body) return;
+     if (event.metaKey || event.ctrlKey || event.altKey) return;
+     if (!event.key || event.key.length !== 1) return;
+     try { term.focus(); } catch (_) {}
+     sendInput(event.key);
+     event.preventDefault();
+   }, true);
 
    addTerminalResource(term.onResize(({ cols, rows }) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1002,7 +1027,9 @@
      break;
     }
     case 'shell-reset': {
-     term?.reset();
+     // Wiping here erased a failing shell's own error message and made a
+     // respawn storm look like a frozen terminal. Keep what the user saw.
+     term?.write('\r\n\x1b[2m──── shell restarted ────\x1b[0m\r\n');
      updateStatus('Connected', 'connected');
      setFooter('Fresh shell — type to continue');
      break;
