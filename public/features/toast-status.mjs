@@ -75,8 +75,8 @@ export function init(T1) {
     }
     .t1status-entry:last-child { border-bottom: none; }
     .t1status-entry.info { color: var(--ui-accent); }
-    .t1status-entry.warn { color: #e0af68; }
-    .t1status-entry.error { color: #f7768e; }
+    .t1status-entry.warn { color: var(--ui-warning, #dcc38b); }
+    .t1status-entry.error { color: var(--ui-danger, #e2a69e); }
     .t1status-time { color: var(--ui-muted); margin-right: 6px; }
     .t1status-footer { color: var(--ui-muted); font-size: 11px; cursor: pointer; }
   `);

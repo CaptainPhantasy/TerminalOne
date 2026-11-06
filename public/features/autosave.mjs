@@ -39,12 +39,11 @@ export function init(T1) {
       if (!data || !Array.isArray(data.lines) || !data.lines.length) return false;
       const term = T1.term;
       if (term && data.lines.length) {
-        term.write(`\r\n\x1b[2m[autosave restored — ${data.lines.length} lines]\x1b[0m\r\n`);
         term.write(data.lines.join('\r\n') + '\r\n');
         if (data.theme && window.__terminalOne) window.__terminalOne.setTheme(data.theme);
         if (data.style && window.__terminalOne) window.__terminalOne.setStyle(data.style);
       }
-      T1.toast(`Restored ${data.lines.length} autosaved lines`);
+      T1.toast('Previous session restored');
       return true;
     } catch (_) { return false; }
   }
@@ -52,8 +51,7 @@ export function init(T1) {
   T1.onTermReady(() => {
     clearInterval(timer);
     timer = setInterval(snapshot, INTERVAL_MS);
-    // Save immediately on connect to capture the resumed buffer.
-    snapshot();
+    // Leave the prior snapshot intact until the initial restore decision.
   });
 
   window.addEventListener('beforeunload', snapshot);

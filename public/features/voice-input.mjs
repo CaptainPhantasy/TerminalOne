@@ -12,15 +12,15 @@ export function init(T1) {
   T1.ui.addStyle(`
     .t1voice-button.listening,
     .t1voice-key.listening {
-      background: #f7768e;
-      color: #1a1b26;
-      border-color: #f7768e;
+      background: #e2a69e;
+      color: #14171b;
+      border-color: #e2a69e;
     }
     .t1voice-button.transcribing,
     .t1voice-key.transcribing {
-      background: #e0af68;
-      color: #1a1b26;
-      border-color: #e0af68;
+      background: #dcc38b;
+      color: #14171b;
+      border-color: #dcc38b;
     }
     .t1voice-key {
       min-width: 64px;
@@ -51,7 +51,7 @@ export function init(T1) {
       button.disabled = state === 'transcribing' || !supported();
       button.setAttribute('aria-pressed', state === 'recording' ? 'true' : 'false');
       button.textContent = state === 'recording' ? 'Stop' : state === 'transcribing' ? 'Wait' : 'Voice';
-      button.title = supported() ? 'Voice input' : 'Voice input requires HTTPS/localhost and MediaRecorder';
+      button.title = supported() ? 'Voice input' : 'Voice input needs a secure connection and a supported browser';
     }
   }
 
@@ -123,7 +123,7 @@ export function init(T1) {
   async function start() {
     if (state !== 'idle') return;
     if (!supported()) {
-      T1.toast('Voice input requires HTTPS/localhost and MediaRecorder support', 'warn');
+      T1.toast('Voice input needs a secure connection and a supported browser', 'warn');
       setState('idle');
       return;
     }

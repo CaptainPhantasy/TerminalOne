@@ -35,7 +35,7 @@ export function init(T1) {
       font-size: 13px;
       cursor: pointer;
     }
-    .t1-stylus-menu button:active { background: var(--ui-accent); color: #000; }
+    .t1-stylus-menu button:active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
   `);
 
   const canvas = document.createElement('canvas');

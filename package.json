@@ -29,7 +29,7 @@
     "doctor": "scripts/node-runtime.sh doctor",
     "repair": "scripts/node-runtime.sh repair",
     "test": "npm run test:security && bash tests/hooks.test.sh && npm run test:unit && scripts/node-runtime.sh exec tests/smoke-test.js && scripts/node-runtime.sh exec tests/feature-test.js && scripts/node-runtime.sh exec tests/feature-behavior-test.js && scripts/node-runtime.sh exec tests/voice-input.test.js && scripts/node-runtime.sh exec tests/responsive-test.js",
-    "test:unit": "scripts/node-runtime.sh exec tests/input-guard.test.mjs && node --test tests/service-worker.test.js",
+    "test:unit": "scripts/node-runtime.sh exec tests/input-guard.test.mjs && node --test tests/service-worker.test.js tests/commercial-polish.test.js tests/autosave-restore.test.mjs tests/shell-resolve.test.js",
     "test:smoke": "scripts/node-runtime.sh exec tests/smoke-test.js",
     "test:features": "scripts/node-runtime.sh exec tests/feature-test.js",
     "test:behavior": "scripts/node-runtime.sh exec tests/feature-behavior-test.js",

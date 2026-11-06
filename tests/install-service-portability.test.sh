@@ -1,6 +1,13 @@
 #!/bin/bash
 set -euo pipefail
 
+# This exercises a native macOS app bundle, BSD stat and Mach-O output.
+# Browser/server portability is covered separately on Linux by npm test.
+if [ "$(uname -s)" != "Darwin" ]; then
+  echo "SKIP: native app installer portability requires macOS (BSD stat and Mach-O)."
+  exit 0
+fi
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
