@@ -60,9 +60,23 @@ The release includes `terminalone-1.0.2.tgz`, source where applicable, and `SHA2
 
 Open an issue with your platform, version, command, and a minimal reproduction. Keep credentials and personal transcripts out of reports. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 
-## License
+## Why We Use the MIT License
 
-MIT — see [LICENSE](LICENSE).
+TerminalOne is MIT licensed, while our standalone engines and runtimes (LGCY, FatChin,
+RATBAG, JEVRuntime and wsdash) use the AGPL-3.0. If you are comparing our repositories,
+here is the line we draw:
+
+- **Drop-In Primitive:** TerminalOne is a small, self-contained terminal surface: a real
+  PTY behind a browser interface. You can run it as is, fork it, or wire it into your
+  own desktop, web or CLI setup, open source or commercial, without license boundary
+  friction.
+- **Clear Line Between Primitives and Engines:** At Floyd's Labs / Legacy AI, we release
+  thin integration primitives and interface building blocks under MIT so you can use
+  them anywhere. Our standalone engines and foundational runtimes use the AGPL-3.0, so
+  hosted commercial forks contribute their improvements back.
+
+Keep the copyright and license notice with your copy and you are set. See
+[`LICENSE`](LICENSE) for the full terms.
 
 ---
 
