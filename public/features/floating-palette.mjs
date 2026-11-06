@@ -10,15 +10,15 @@ export function init(T1) {
 
   T1.ui.addStyle(`
     .t1-fab {
-      position: fixed;
-      right: 20px; bottom: calc(20px + env(safe-area-inset-bottom));
-      width: 56px; height: 56px;
-      border-radius: 50%;
+      position: relative;
+      margin: 8px 16px; align-self: flex-end; flex-shrink: 0;
+      width: 64px; height: 44px;
+      border-radius: 8px;
       background: var(--ui-accent);
-      color: #000;
+      color: var(--ui-on-accent, #14171b);
       border: none;
-      font-size: 24px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      font-size: 13px;
+      box-shadow: none;
       z-index: 220;
       display: flex; align-items: center; justify-content: center;
     }
@@ -30,13 +30,14 @@ export function init(T1) {
       border-radius: 16px 16px 0 0;
       border-top: 1px solid var(--ui-border);
       transform: translateY(110%);
+      visibility: hidden;
       transition: transform 0.25s ease;
       z-index: 230;
       display: flex;
       flex-direction: column;
       padding-bottom: env(safe-area-inset-bottom);
     }
-    .t1-tablet-sheet.open { transform: translateY(0); }
+    .t1-tablet-sheet.open { transform: translateY(0); visibility: visible; }
     .t1-tablet-sheet header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 14px 18px; border-bottom: 1px solid var(--ui-border);
@@ -50,22 +51,22 @@ export function init(T1) {
       border: 1px solid var(--ui-border); border-radius: 10px;
       font-size: 14px; cursor: pointer;
     }
-    .t1-tablet-actions button:active { background: var(--ui-accent); color: #000; }
+    .t1-tablet-actions button:active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
   `);
 
   const fab = document.createElement('button');
   fab.type = 'button';
   fab.className = 't1-fab';
-  fab.textContent = '✦';
+  fab.textContent = 'Cmd';
   fab.setAttribute('aria-label', 'Open command palette');
-  document.body.appendChild(fab);
+  document.querySelector('.app-shell').insertBefore(fab, document.querySelector('.terminal-container'));
 
   const sheet = document.createElement('div');
   sheet.className = 't1-tablet-sheet';
   sheet.setAttribute('role', 'dialog');
   sheet.setAttribute('aria-label', 'Tablet command palette');
   sheet.innerHTML = `
-    <header><h3>Command Palette</h3><button type="button" class="sheet-close" aria-label="Close palette">✕</button></header>
+    <header><h3>Command Palette</h3><button type="button" class="sheet-close" aria-label="Close palette">×</button></header>
     <div class="t1-tablet-actions"></div>
   `;
   document.body.appendChild(sheet);

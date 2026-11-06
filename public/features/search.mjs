@@ -50,7 +50,7 @@ export function init(T1) {
       min-width: 28px;
       padding: 0 6px;
     }
-    .t1search-toggle.active { background: var(--ui-accent); color: #000; }
+    .t1search-toggle.active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
   `);
 
   const state = { caseSensitive: false, regex: false };

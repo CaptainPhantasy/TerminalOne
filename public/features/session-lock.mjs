@@ -25,7 +25,7 @@ export function init(T1) {
     }
     .t1-lock-overlay button {
       padding: 8px 18px; border-radius: 6px; border: none;
-      background: var(--ui-accent); color: #000; cursor: pointer; font-weight: 600;
+      background: var(--ui-accent); color: var(--ui-on-accent, #14171b); cursor: pointer; font-weight: 600;
     }
     .t1-lock-overlay .hint { color: #aaa; font-size: 12px; }
   `);

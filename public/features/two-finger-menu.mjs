@@ -24,7 +24,7 @@ export function init(T1) {
       padding: 8px 14px; background: transparent; border: none;
       color: var(--ui-fg); text-align: left; font-size: 13px; cursor: pointer;
     }
-    .t1-twofinger-menu button:active { background: var(--ui-accent); color: #000; }
+    .t1-twofinger-menu button:active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
   `);
 
   const menu = document.createElement('div');

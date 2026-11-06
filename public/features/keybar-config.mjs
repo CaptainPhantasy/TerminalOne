@@ -17,11 +17,11 @@ export function init(T1) {
 
   T1.ui.addStyle(`
     .t1keybar-cfg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    .t1keybar-cfg label { display: flex; align-items: center; gap: 6px; font-size: 12px; text-transform: none; letter-spacing: 0; cursor: pointer; }
+    .t1keybar-cfg label { display: flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; font-size: 12px; text-transform: none; letter-spacing: 0; cursor: pointer; }
   `);
 
   const row = document.createElement('div');
-  row.className = 'settings-row';
+  row.className = 'settings-row settings-keybar-row';
   row.innerHTML = `
     <label>Key bar groups</label>
     <div class="t1keybar-cfg">
@@ -32,7 +32,7 @@ export function init(T1) {
       <label><input type="checkbox" data-key="symbols" ${cfg.symbols ? 'checked' : ''}> Symbols</label>
     </div>
   `;
-  panel.appendChild(row);
+  panel.insertBefore(row, panel.querySelector('.settings-actions'));
 
   function save() {
     T1.storage.set(LS_KEYBAR, JSON.stringify(cfg));

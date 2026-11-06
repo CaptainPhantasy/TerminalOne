@@ -19,13 +19,14 @@ export function init(T1) {
       border-top: 1px solid var(--ui-border);
       border-radius: 12px 12px 0 0;
       transform: translateY(110%);
+      visibility: hidden;
       transition: transform 0.25s ease;
       z-index: 250;
       display: flex;
       flex-direction: column;
       padding-bottom: env(safe-area-inset-bottom);
     }
-    .t1-swipe-history-tray.open { transform: translateY(0); }
+    .t1-swipe-history-tray.open { transform: translateY(0); visibility: visible; }
     .t1-swipe-history-tray header {
       display: flex;
       align-items: center;
@@ -51,7 +52,7 @@ export function init(T1) {
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .t1-swipe-history-list .cmd:active { background: var(--ui-accent); color: #000; }
+    .t1-swipe-history-list .cmd:active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
     .t1-swipe-history-list .empty {
       padding: 20px 14px; color: var(--ui-muted); font-size: 12px; text-align: center;
     }
@@ -72,7 +73,7 @@ export function init(T1) {
   tray.setAttribute('role', 'dialog');
   tray.setAttribute('aria-label', 'Command history');
   tray.innerHTML = `
-    <header><h3>Recent commands</h3><button type="button" class="close-btn" aria-label="Close history">✕</button></header>
+    <header><h3>Recent commands</h3><button type="button" class="close-btn" aria-label="Close history">×</button></header>
     <div class="t1-swipe-history-list"></div>
   `;
   document.body.appendChild(tray);

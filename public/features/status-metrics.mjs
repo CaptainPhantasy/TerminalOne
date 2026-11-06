@@ -34,7 +34,7 @@ export function init(T1) {
     if (rttMs != null) {
       parts.push(`latency ${rttMs.toFixed(0)}ms`);
     }
-    const text = parts.join(' · ') || 'WebSocket terminal emulator';
+    const text = parts.join(' · ') || 'Your shell, in focus';
     if (text !== lastFooterText) {
       lastFooterText = text;
       ignoreNextMutation = true;

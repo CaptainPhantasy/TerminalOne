@@ -38,6 +38,16 @@ Session resume keeps detached shells for up to five minutes. Browser settings pe
 
 For herdr on iPhone or iPad, tap **Ctrl+b** in the bottom key bar to send Control plus lowercase b immediately. You can also open **Snippets** and tap **Ctrl+b** there. No keyboard switch or Enter press is needed.
 
+### Open it like a desktop app (macOS)
+
+From a source checkout on macOS, run `bash scripts/install-service.sh` to install the `t1` launcher and TerminalOne.app. The launcher opens the UI only after health is confirmed, then falls back to direct local startup if launchd is unavailable. Startup diagnostics go to `~/Library/Logs/TerminalOne/local-launch.err.log`.
+
+## A little more room
+
+![TerminalOne in Graphite Studio on a phone in landscape](docs/screenshots/phone-landscape.png)
+
+On short touch screens, **Tools** opens the secondary controls without taking over the shell. **Ctrl+b** and **Voice** stay in the bottom key bar. Paper and graphite palettes keep the chrome quiet; the terminal does the talking.
+
 ## What is in the box
 
 The release includes `terminalone-1.0.1.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.

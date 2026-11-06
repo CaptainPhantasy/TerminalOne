@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="6" fill="#1a1b26"/>
-  <path d="M7 11l5 5-5 5" fill="none" stroke="#7aa2f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="15" y1="22" x2="24" y2="22" stroke="#9ece6a" stroke-width="2.5" stroke-linecap="round"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title"><title id="title">TerminalOne — precision prompt</title><path fill="#24313c" stroke="#aab6bf" stroke-width="8" stroke-linejoin="round" d="M104 64H380L444 128V412L388 456H104L68 420V100Z"/><path fill="#15212b" d="M104 104H372L404 136V400L376 420H112V120Z"/><path fill="#f2f0e9" d="M128 140H280V184H228V304H180V184H128Z"/><path fill="#d6ad68" d="M294 168L342 140H372V304H326V198L294 216Z"/><path fill="none" stroke="#f2f0e9" stroke-width="20" stroke-linecap="square" stroke-linejoin="miter" d="M140 340L164 364L140 388M208 386H356"/></svg>

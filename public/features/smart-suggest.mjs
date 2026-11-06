@@ -14,17 +14,21 @@ export function init(T1) {
   T1.ui.addStyle(`
     .t1-smart-suggest {
       display: none;
+      flex: 0 0 auto;
+      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
       padding: 6px 8px;
       background: var(--ui-elevated);
       border-top: 1px solid var(--ui-border);
-      overflow-x: auto;
+      overflow: visible;
       -webkit-overflow-scrolling: touch;
     }
     body[data-device="iphone"] .t1-smart-suggest { display: flex; }
     .t1-smart-suggest .sug {
-      flex: 0 0 auto;
+      flex: 0 1 auto;
+      max-width: 100%;
+      overflow-wrap: anywhere;
       padding: 6px 10px;
       font-size: 12px;
       color: var(--ui-fg);
@@ -33,7 +37,7 @@ export function init(T1) {
       border-radius: 6px;
       cursor: pointer;
     }
-    .t1-smart-suggest .sug:active { background: var(--ui-accent); color: #000; }
+    .t1-smart-suggest .sug:active { background: var(--ui-accent); color: var(--ui-on-accent, #14171b); }
     .t1-smart-suggest .label {
       font-size: 10px;
       color: var(--ui-muted);

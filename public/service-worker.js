@@ -1,9 +1,18 @@
 /* TerminalOne service worker — offline shell only. */
-const CACHE_NAME = 'terminalone-shell-v2';
+const CACHE_NAME = 'terminalone-shell-v3';
 const OFFLINE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/favicon.svg',
+  '/icon.svg',
+  '/favicon.ico',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
+  '/icon-180.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/input-guard.mjs',
   '/node_modules/@xterm/xterm/css/xterm.css',
   '/node_modules/@xterm/xterm/lib/xterm.mjs',
