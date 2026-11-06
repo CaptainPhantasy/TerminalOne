@@ -2,9 +2,14 @@
 
 All notable changes to TerminalOne.
 
-## Unreleased
+## [1.0.2] — 2026-11-06
 
 - Added a one-tap **Ctrl+b** shortcut for herdr to the iPhone/iPad key bar and the Snippets row. It sends Control plus lowercase b immediately, without switching keyboards or pressing Enter.
+- Bound shell respawn storms, preserved early input, and reset terminal context more cleanly after disconnects.
+- Fall back to an available shell when `/bin/zsh` is missing on the host.
+- Hardened browser input-guard so short batched keystrokes are not dropped.
+- Patched body-parser, proxy-addr, and qs advisories; pinned CI to Node 22.
+- Updated package homepage to https://floydslabs.com and refreshed commercial studio screenshots.
 
 ## [1.0.0] — 2026-06-26
 

@@ -6,16 +6,16 @@
 
 A local browser terminal with a real PTY, session resume, themes, keyboard tools, and a responsive interface. Built at Floyd’s Labs: one garage, two black cats, and tools that have to earn the desk space.
 
-[Download v1.0.1](https://github.com/CaptainPhantasy/TerminalOne/releases/tag/v1.0.1) · [Report a bug](https://github.com/CaptainPhantasy/TerminalOne/issues) · [Floyd’s Labs](https://floyd-labs-proving-ground.captainphantasy.chatgpt.site/open-source)
+[Download v1.0.2](https://github.com/CaptainPhantasy/TerminalOne/releases/tag/v1.0.2) · [Report a bug](https://github.com/CaptainPhantasy/TerminalOne/issues) · [Floyd’s Labs](https://floydslabs.com)
 
 ## Get it running
 
 Requirements: **Node.js 22.x and npm; macOS or Linux**.
 
-Download `terminalone-1.0.1.tgz`, unpack it, and install dependencies:
+Download `terminalone-1.0.2.tgz`, unpack it, and install dependencies:
 
 ```sh
-mkdir terminalone && tar -xzf terminalone-1.0.1.tgz -C terminalone
+mkdir terminalone && tar -xzf terminalone-1.0.2.tgz -C terminalone
 cd terminalone/package
 npm ci --omit=dev
 npm run doctor
@@ -50,7 +50,7 @@ On short touch screens, **Tools** opens the secondary controls without taking ov
 
 ## What is in the box
 
-The release includes `terminalone-1.0.1.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.
+The release includes `terminalone-1.0.2.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.
 
 ## Show the work
 

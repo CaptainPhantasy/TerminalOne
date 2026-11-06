@@ -1,13 +1,13 @@
 {
   "name": "terminalone",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A browser-based terminal emulator \u2014 your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/CaptainPhantasy/TerminalOne.git"
   },
-  "homepage": "https://floyd-labs-proving-ground.captainphantasy.chatgpt.site/open-source",
+  "homepage": "https://floydslabs.com",
   "bugs": {
     "url": "https://github.com/CaptainPhantasy/TerminalOne/issues"
   },
