@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('path');
 const http = require('http');
 const os = require('os');
+const { resolveShell } = require('./shell-resolve');
 const fs = require('fs');
 const { spawn } = require('child_process');
 
@@ -228,7 +229,7 @@ function wirePtyToSession(ptyProcess, session) {
     if (session.rapidExits >= MAX_RAPID_RESPAWNS) {
       wsError(session.ws, 'SHELL_WILL_NOT_START',
         'The shell exited immediately ' + session.rapidExits + ' times in a row, so it was '
-        + 'not restarted again. Check $SHELL (currently ' + (process.env.SHELL || '/bin/zsh')
+        + 'not restarted again. Check $SHELL (currently ' + resolveShell()
         + ') and your shell profile.', id);
       cleanupSession(session);
       return;
@@ -270,7 +271,7 @@ function spawnShell(session, cwd) {
   if (!fs.existsSync(workingDir)) workingDir = os.homedir();
 
   const ptyEnv = { ...process.env, TERM: 'xterm-256color' };
-  const shell = process.env.SHELL || '/bin/zsh';
+  const shell = resolveShell();
 
   session.shellCwd = workingDir;
 
@@ -343,7 +344,7 @@ function resumeSession(target, ws, dims, placeholder) {
   sendToSession(target, {
     type: 'ready',
     sessionId: id,
-    command: target.command || process.env.SHELL || '/bin/zsh',
+    command: target.command || resolveShell(),
     cwd: target.shellCwd,
     resumed: true
   });
@@ -486,7 +487,7 @@ function handleMessage(session, ws, data) {
       }
       spawnShell(session, data.cwd || process.env.HOME || os.homedir());
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ready', sessionId: session.id, command: process.env.SHELL || '/bin/zsh', cwd: session.shellCwd }));
+        ws.send(JSON.stringify({ type: 'ready', sessionId: session.id, command: resolveShell(), cwd: session.shellCwd }));
       }
       break;
     }
@@ -682,7 +683,7 @@ app.get('/admin/sessions', (req, res) => {
   const sessions = Array.from(activeSessions.values()).map((s) => {
     const resumable = !s.ws && !!s.ptyProcess && !s.processExited && graceTimers.has(s.id);
     return {
-      id: s.id, command: s.command || process.env.SHELL || '/bin/zsh',
+      id: s.id, command: s.command || resolveShell(),
       startedAt: s.startedAt || null, durationMs: s.startedAt ? Date.now() - s.startedAt : null,
       processExited: s.processExited,
       attached: !!s.ws,
