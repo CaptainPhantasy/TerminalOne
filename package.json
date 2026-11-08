@@ -1,7 +1,7 @@
 {
   "name": "terminalone",
-  "version": "1.0.2",
-  "description": "A browser-based terminal emulator \u2014 your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
+  "version": "1.0.3",
+  "description": "A browser-based terminal emulator — your shell, in your browser, with 39 feature modules and PWA install. Free. No subscription. No catch.",
   "license": "MIT",
   "repository": {
     "type": "git",

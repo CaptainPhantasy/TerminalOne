@@ -2,6 +2,12 @@
 
 All notable changes to TerminalOne.
 
+## [1.0.3] — 2026-11-08
+
+- Added a Voice / speech-to-text settings section. The STT command, model, language, and argument template are saved server-side in `~/.config/terminalone/voice.json` and used at transcription time.
+- Audio is staged under `~/.cache/terminalone`; the server accepts `.txt` or `.srt` output and no longer assumes `whisper` on `PATH` or a fixed `tiny.en` model.
+- Explicit `TERMINALONE_STT_*` environment values override the saved setting for deployment and tests.
+
 ## [1.0.2] — 2026-11-06
 
 - Added a one-tap **Ctrl+b** shortcut for herdr to the iPhone/iPad key bar and the Snippets row. It sends Control plus lowercase b immediately, without switching keyboards or pressing Enter.
