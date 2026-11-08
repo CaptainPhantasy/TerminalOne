@@ -45,6 +45,14 @@ const STT_MAX_CHUNK_BYTES = 512 * 1024;
 const STT_MAX_UTTERANCE_BYTES = 8 * 1024 * 1024;
 const STT_TIMEOUT_MS = Number(process.env.TERMINALONE_STT_TIMEOUT_MS || 60_000);
 
+// Voice settings live in the member's home so any STT command and model can be
+// chosen without environment variables. Audio is staged under the cache dir so
+// it never lands in the shared system temp directory.
+const VOICE_CONFIG_PATH = path.join(os.homedir(), '.config', 'terminalone', 'voice.json');
+const VOICE_TMP_BASE = path.join(os.homedir(), '.cache', 'terminalone');
+const VOICE_DEFAULT_ARGS = '{audio} --model {model} --language {language} --output_format txt --output_dir {dir} --verbose False --fp16 False';
+const VOICE_PLACEHOLDERS = new Set(['audio', 'model', 'language', 'dir', 'base', 'output']);
+
 // Resume: when a WS drops unexpectedly, keep the PTY alive this long so the
 // client can reconnect to the same session. Output produced while detached
 // (and while attached) is buffered in a ring and replayed on resume.
@@ -391,29 +399,153 @@ function extForMime(mimeType) {
   return 'webm';
 }
 
+function defaultVoiceConfig() {
+  return {
+    command: process.env.TERMINALONE_STT_BIN || 'whisper',
+    model: process.env.TERMINALONE_STT_MODEL || 'tiny.en',
+    language: process.env.TERMINALONE_STT_LANGUAGE || 'en',
+    args: VOICE_DEFAULT_ARGS
+  };
+}
+
+function readVoiceConfig() {
+  const config = defaultVoiceConfig();
+  let raw;
+  try { raw = fs.readFileSync(VOICE_CONFIG_PATH, 'utf8'); }
+  catch (_) { return config; }
+  let saved;
+  try { saved = JSON.parse(raw); }
+  catch (_) { return config; }
+  if (!saved || typeof saved !== 'object') return config;
+  for (const key of ['command', 'model', 'language', 'args']) {
+    if (typeof saved[key] === 'string') config[key] = saved[key];
+  }
+  return config;
+}
+
+function validateVoiceConfig(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  const command = typeof source.command === 'string' ? source.command.trim() : '';
+  if (!command) return { ok: false, error: 'command must not be empty' };
+  if (/[\u0000-\u001f\u007f]/.test(command)) return { ok: false, error: 'command must not contain NUL, newline, or control characters' };
+
+  const model = typeof source.model === 'string' ? source.model.trim() : '';
+  if (!model) return { ok: false, error: 'model must not be empty' };
+  if (/[\u0000-\u001f\u007f]/.test(model)) return { ok: false, error: 'model must not contain NUL, newline, or control characters' };
+
+  const language = typeof source.language === 'string' ? source.language.trim().toLowerCase() : '';
+  if (!/^(?:[a-z]{2,3}|auto)$/.test(language)) return { ok: false, error: 'language must be a two- or three-letter code, or auto' };
+
+  const args = typeof source.args === 'string' ? source.args.trim() : '';
+  if (!args) return { ok: false, error: 'args must not be empty' };
+  if (args.includes('\u0000')) return { ok: false, error: 'args must not contain NUL characters' };
+  if (!args.includes('{audio}')) return { ok: false, error: 'args must contain {audio}' };
+  const unknown = [...args.matchAll(/\{([^{}]*)\}/g)]
+    .map((match) => match[1])
+    .filter((name) => !VOICE_PLACEHOLDERS.has(name));
+  if (unknown.length) return { ok: false, error: `unknown placeholder {${unknown[0]}}` };
+
+  return { ok: true, value: { command, model, language, args } };
+}
+
+function writeVoiceConfig(config) {
+  fs.mkdirSync(path.dirname(VOICE_CONFIG_PATH), { recursive: true, mode: 0o700 });
+  const body = JSON.stringify({
+    command: config.command,
+    model: config.model,
+    language: config.language,
+    args: config.args
+  }, null, 2) + '\n';
+  fs.writeFileSync(VOICE_CONFIG_PATH, body, { mode: 0o600 });
+  try { fs.chmodSync(VOICE_CONFIG_PATH, 0o600); } catch (_) {}
+}
+
+function resolveVoiceCommand(command) {
+  if (typeof command !== 'string' || !command) return { commandFound: false, commandPath: null };
+  if (command.includes('/')) {
+    const candidate = path.isAbsolute(command) ? command : path.resolve(command);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return { commandFound: true, commandPath: candidate };
+    } catch (_) {
+      return { commandFound: false, commandPath: null };
+    }
+  }
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, command);
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return { commandFound: true, commandPath: candidate };
+    } catch (_) {}
+  }
+  return { commandFound: false, commandPath: null };
+}
+
+function voiceSettingsPayload() {
+  const config = readVoiceConfig();
+  return { ...config, resolved: resolveVoiceCommand(config.command) };
+}
+
+function buildVoiceArgs(config, values) {
+  return config.args
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => token.replace(/\{(audio|model|language|dir|base|output)\}/g, (_, key) => values[key]));
+}
+
 function cleanupTempDir(dir) {
-  if (!dir || !dir.startsWith(os.tmpdir())) return;
+  if (!dir) return;
+  const absolute = path.resolve(dir);
+  const allowed = [path.resolve(VOICE_TMP_BASE), path.resolve(os.tmpdir())];
+  if (!allowed.some((base) => absolute.startsWith(base + path.sep))) return;
   fs.rm(dir, { recursive: true, force: true }, () => {});
 }
 
-function transcribeAudioFile(session, audioPath, tmpDir) {
-  const whisperBin = process.env.TERMINALONE_STT_BIN || 'whisper';
-  const model = process.env.TERMINALONE_STT_MODEL || 'tiny.en';
-  const language = process.env.TERMINALONE_STT_LANGUAGE || 'en';
-  const args = [
-    audioPath,
-    '--model', model,
-    '--language', language,
-    '--output_format', 'txt',
-    '--output_dir', tmpDir,
-    '--verbose', 'False',
-    '--fp16', 'False'
-  ];
-  const threads = process.env.TERMINALONE_STT_THREADS;
-  if (threads) args.push('--threads', threads);
+function transcriptFromSrt(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^\d+$/.test(line) && !line.includes('-->'))
+    .join('\n')
+    .trim();
+}
 
-  info(session.id, 'Starting local STT transcription', { model, language });
-  const child = spawn(whisperBin, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+function readTranscriptText(tmpDir, base, cb) {
+  const txtPath = path.join(tmpDir, `${base}.txt`);
+  fs.readFile(txtPath, 'utf8', (err, text) => {
+    if (!err) { cb(null, text); return; }
+    if (err.code !== 'ENOENT') { cb(err); return; }
+    fs.readFile(path.join(tmpDir, `${base}.srt`), 'utf8', (srtErr, srt) => {
+      if (srtErr) { cb(srtErr); return; }
+      cb(null, transcriptFromSrt(srt));
+    });
+  });
+}
+
+function transcribeAudioFile(session, audioPath, tmpDir) {
+  const checked = validateVoiceConfig(readVoiceConfig());
+  if (!checked.ok) {
+    warn(session.id, 'Voice settings are invalid', { error: checked.error });
+    voiceError(session, 'STT_FAILED', `Voice settings are invalid: ${checked.error}`);
+    cleanupTempDir(tmpDir);
+    return;
+  }
+  const config = checked.value;
+  const base = path.basename(audioPath, path.extname(audioPath));
+  const args = buildVoiceArgs(config, {
+    audio: audioPath,
+    model: config.model,
+    language: config.language,
+    dir: tmpDir,
+    base,
+    output: path.join(tmpDir, `${base}.txt`)
+  });
+
+  info(session.id, 'Starting local STT transcription', {
+    command: config.command, model: config.model, language: config.language
+  });
+  const child = spawn(config.command, args, { stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';
   let settled = false;
   const timer = setTimeout(() => {
@@ -444,15 +576,17 @@ function transcribeAudioFile(session, audioPath, tmpDir) {
       cleanupTempDir(tmpDir);
       return;
     }
-    const base = path.basename(audioPath, path.extname(audioPath));
-    const txtPath = path.join(tmpDir, `${base}.txt`);
-    fs.readFile(txtPath, 'utf8', (err, text) => {
+    readTranscriptText(tmpDir, base, (readErr, text) => {
       cleanupTempDir(tmpDir);
-      if (err) {
+      if (readErr) {
         voiceError(session, 'STT_NO_TRANSCRIPT', 'Speech transcription produced no text');
         return;
       }
-      const transcript = text.trim();
+      const transcript = String(text || '').trim();
+      if (!transcript) {
+        voiceError(session, 'STT_NO_TRANSCRIPT', 'Speech transcription produced no text');
+        return;
+      }
       sendToSession(session, { type: 'voice-transcript', text: transcript });
       info(session.id, 'Local STT transcript ready', { chars: transcript.length });
     });
@@ -467,7 +601,14 @@ function finalizeVoice(session) {
     return;
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'terminalone-stt-'));
+  let tmpDir;
+  try {
+    fs.mkdirSync(VOICE_TMP_BASE, { recursive: true, mode: 0o700 });
+    tmpDir = fs.mkdtempSync(path.join(VOICE_TMP_BASE, 'stt-'));
+  } catch (err) {
+    voiceError(session, 'VOICE_WRITE_FAILED', 'Could not create a voice transcription folder');
+    return;
+  }
   const audioPath = path.join(tmpDir, `utterance.${extForMime(voice.mimeType)}`);
   fs.writeFile(audioPath, Buffer.concat(voice.chunks), (err) => {
     if (err) {
@@ -698,6 +839,7 @@ app.use((req, res, next) => {
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
   next();
 });
+app.use(express.json({ limit: '64kb' }));
 // App assets are served with no-store so the browser always runs the latest
 // frontend (critical during input/dictation iteration — a cached input-guard.mjs
 // silently reproduces already-fixed echo bugs).
@@ -711,6 +853,21 @@ app.get('/session-profile', (req, res) => {
   if (!policy) return res.json({ requireDirectory: false });
   try { res.json(policy.profile(req)); }
   catch (_) { res.status(400).json({ error: 'Unknown tool profile' }); }
+});
+app.get('/api/voice/settings', (req, res) => {
+  res.json(voiceSettingsPayload());
+});
+app.put('/api/voice/settings', (req, res) => {
+  const checked = validateVoiceConfig(req.body || {});
+  if (!checked.ok) { res.status(400).json({ error: checked.error }); return; }
+  try {
+    writeVoiceConfig(checked.value);
+  } catch (err) {
+    error(null, 'Could not save voice settings', { err: err.message });
+    res.status(500).json({ error: `Could not save voice settings: ${err.message}` });
+    return;
+  }
+  res.json({ ...checked.value, resolved: resolveVoiceCommand(checked.value.command) });
 });
 app.get('/admin/sessions', (req, res) => {
   const sessions = Array.from(activeSessions.values()).filter((s) => !policy || s.owner === req.terminalPrincipal).map((s) => {
