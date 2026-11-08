@@ -281,6 +281,34 @@
   }
   .settings-row select:focus { outline: none; border-color: var(--ui-accent); }
   .settings-actions { display: flex; justify-content: flex-end; margin-top: 4px; }
+  .settings-section { margin: 0 0 14px; padding-top: 12px; border-top: 1px solid var(--ui-border); }
+  .settings-section h3 { font-size: 11px; margin: 0 0 12px; color: var(--ui-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .settings-section .settings-row input { cursor: text; }
+  .settings-section textarea {
+   width: 100%;
+   background: var(--ui-bg);
+   color: var(--ui-fg);
+   border: 1px solid var(--ui-border);
+   border-radius: 6px;
+   padding: 7px 9px;
+   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+   font-size: 12px;
+   line-height: 1.45;
+   min-height: 64px;
+   resize: vertical;
+  }
+  .settings-section textarea:focus { outline: none; border-color: var(--ui-accent); }
+  .settings-advanced { margin-bottom: 14px; }
+  .settings-advanced summary { cursor: pointer; font-size: 11px; color: var(--ui-muted); margin-bottom: 6px; }
+  .settings-advanced summary:focus { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
+  .settings-voice-actions { align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  #voiceStatus { flex: 1 1 160px; min-height: 1.4em; font-size: 11px; line-height: 1.4; color: var(--ui-muted); overflow-wrap: anywhere; }
+  #voiceStatus[data-kind="ok"] { color: #9ccf9c; }
+  #voiceStatus[data-kind="warn"] { color: #dcc38b; }
+  #voiceStatus[data-kind="error"] { color: #e2a69e; }
+  #voiceSave { background: var(--ui-bg); color: var(--ui-fg); border: 1px solid var(--ui-border); border-radius: 6px; padding: 8px 12px; font-size: 12px; cursor: pointer; }
+  #voiceSave:hover { border-color: var(--ui-accent); }
+  #voiceSave:disabled { cursor: default; }
  .t1toolbar {
    display: flex;
    flex-wrap: wrap;
@@ -357,6 +385,7 @@
   .settings-panel h2 { grid-column: 1 / -1; margin: 0; }
   .settings-row { margin: 0; }
   .settings-keybar-row, .settings-actions { grid-column: 1 / -1; }
+  .settings-section { grid-column: 1 / -1; }
   .settings-keybar-row .t1keybar-cfg { grid-template-columns: repeat(5, 1fr); }
  }
  .t1session-tabs { flex-wrap: wrap; overflow: visible !important; margin-left: 0 !important; }
@@ -427,6 +456,32 @@
    <div class="settings-row">
     <label for="themeSelect">Color theme</label>
     <select id="themeSelect"></select>
+   </div>
+   <div class="settings-section" role="group" aria-labelledby="voiceHeading">
+    <h3 id="voiceHeading">Voice / speech-to-text</h3>
+    <div class="settings-row">
+     <label for="voiceCommand">STT command</label>
+     <input id="voiceCommand" type="text" placeholder="whisper or /path/to/whisper" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="settings-row">
+     <label for="voiceModel">Voice model</label>
+     <input id="voiceModel" type="text" placeholder="tiny.en, medium, or model path" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="settings-row">
+     <label for="voiceLanguage">Language</label>
+     <input id="voiceLanguage" type="text" placeholder="en or auto" autocomplete="off" spellcheck="false">
+    </div>
+    <details class="settings-advanced">
+     <summary>Advanced argument template</summary>
+     <div class="settings-row">
+      <label for="voiceArgs">Arguments</label>
+      <textarea id="voiceArgs" rows="4" spellcheck="false"></textarea>
+     </div>
+    </details>
+    <div class="settings-actions settings-voice-actions">
+     <span id="voiceStatus" role="status" aria-live="polite"></span>
+     <button id="voiceSave" type="button">Save voice settings</button>
+    </div>
    </div>
    <div class="settings-actions">
     <button id="settingsClose" type="button">Done</button>
@@ -1118,9 +1173,68 @@
    }
   }
 
+  function setVoiceStatus(text, kind) {
+   const el = $('#voiceStatus');
+   if (!el) return;
+   el.textContent = text || '';
+   el.dataset.kind = kind || '';
+  }
+
+  function fillVoiceFields(data) {
+   $('#voiceCommand').value = data.command || '';
+   $('#voiceModel').value = data.model || '';
+   $('#voiceLanguage').value = data.language || '';
+   $('#voiceArgs').value = data.args || '';
+  }
+
+  async function loadVoiceSettings() {
+   setVoiceStatus('Loading voice settings...');
+   try {
+    const res = await fetch('/api/voice/settings', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    fillVoiceFields(data);
+    const resolved = data.resolved || {};
+    if (resolved.commandFound) setVoiceStatus(`Command found: ${resolved.commandPath}`, 'ok');
+    else setVoiceStatus(`Command not found: ${data.command || '(empty)'}`, 'error');
+   } catch (err) {
+    setVoiceStatus(`Could not load voice settings: ${err.message || err}`, 'error');
+   }
+  }
+
+  async function saveVoiceSettings() {
+   const button = $('#voiceSave');
+   const body = {
+    command: $('#voiceCommand').value,
+    model: $('#voiceModel').value,
+    language: $('#voiceLanguage').value,
+    args: $('#voiceArgs').value
+   };
+   button.disabled = true;
+   setVoiceStatus('Saving voice settings...');
+   try {
+    const res = await fetch('/api/voice/settings', {
+     method: 'PUT',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    fillVoiceFields(data);
+    const resolved = data.resolved || {};
+    if (resolved.commandFound) setVoiceStatus(`Saved. Command found: ${resolved.commandPath}`, 'ok');
+    else setVoiceStatus(`Saved, but command not found: ${data.command || '(empty)'}`, 'warn');
+   } catch (err) {
+    setVoiceStatus(`Could not save voice settings: ${err.message || err}`, 'error');
+   } finally {
+    button.disabled = false;
+   }
+  }
+
   function openSettings() {
    $('#styleSelect').value = currentStyle;
    $('#themeSelect').value = currentTheme;
+   loadVoiceSettings();
    $('.app-shell').inert = true;
    $('#settingsModal').classList.add('open');
    $('#styleSelect').focus();
@@ -1136,7 +1250,7 @@
   $('#settingsModal').addEventListener('keydown', e => {
    if (e.key === 'Escape') { e.preventDefault(); closeSettings(); }
    if (e.key !== 'Tab') return;
-   const items = [...$('#settingsModal').querySelectorAll('button, select, input')].filter(el => !el.disabled);
+   const items = [...$('#settingsModal').querySelectorAll('button, select, input, textarea')].filter(el => !el.disabled);
    const first = items[0], last = items[items.length - 1];
    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -1146,6 +1260,7 @@
   $('#settingsModal').addEventListener('click', (e) => { if (e.target === $('#settingsModal')) closeSettings(); });
   $('#styleSelect').addEventListener('change', (e) => applyStyle(e.target.value));
   $('#themeSelect').addEventListener('change', (e) => applyTheme(e.target.value));
+  $('#voiceSave').addEventListener('click', saveVoiceSettings);
 
   $('#reconnectBtn').addEventListener('click', () => {
    // Manual reconnect keeps the saved session id so it resumes.
@@ -1214,6 +1329,15 @@
     }, ttl);
     return id;
   }
+
+  // A failed or missing local STT command is usually a settings problem; point
+  // the user at the new section instead of only surfacing the raw error code.
+  window.addEventListener('t1:voice-error', (event) => {
+   const code = event.detail && event.detail.code;
+   if (code === 'STT_UNAVAILABLE' || code === 'STT_FAILED') {
+    __showToast('Voice settings: Settings → Voice', 'warn');
+   }
+  });
 
   const T1 = {
     get term() { return term; },
