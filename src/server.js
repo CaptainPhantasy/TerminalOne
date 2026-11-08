@@ -15,9 +15,21 @@ const { v4: uuidv4 } = require('uuid');
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 11001;
-const HOST = '127.0.0.1';
+const HOST = process.env.HOST || '127.0.0.1';
+const SOCKET_PATH = process.env.TERMINALONE_SOCKET || '';
+// Deployment policy is optional and generic; tool-specific configuration lives outside this app.
+const policy = process.env.TERMINALONE_POLICY_MODULE
+  ? require(path.resolve(process.env.TERMINALONE_POLICY_MODULE)) : null;
 const { createRequestBoundary } = require('./request-boundary');
-const isTrustedRequest = createRequestBoundary(PORT, process.env.TERMINALONE_TRUSTED_ORIGINS || '');
+// The release boundary guards a loopback TCP listener by checking the Host
+// header against localhost/trusted HTTPS origins. The private Unix socket is
+// reached through its own filesystem permissions and the deployment policy's
+// origin check instead, so its Host header is not a loopback one.
+const enforceRequestBoundary = createRequestBoundary(PORT, process.env.TERMINALONE_TRUSTED_ORIGINS || '');
+function requestAllowed(req) {
+  if (SOCKET_PATH) return true;
+  return enforceRequestBoundary(req);
+}
 const MAX_CONCURRENT_SESSIONS = 10;
 
 // Input typed in the moment between the socket opening and the shell existing
@@ -270,14 +282,16 @@ function spawnShell(session, cwd) {
   let workingDir = cwd || process.env.HOME || os.homedir();
   if (!fs.existsSync(workingDir)) workingDir = os.homedir();
 
-  const ptyEnv = { ...process.env, TERM: 'xterm-256color' };
-  const shell = resolveShell();
+  const launch = policy ? policy.launch(session, cwd) : null;
+  if (launch) workingDir = launch.cwd;
+  const ptyEnv = launch ? launch.env : { ...process.env, TERM: 'xterm-256color' };
+  const shell = launch ? launch.command : resolveShell();
 
   session.shellCwd = workingDir;
 
   let ptyProcess;
   try {
-    ptyProcess = pty.spawn(shell, ['-l'], { name: 'xterm-256color', cols, rows, cwd: workingDir, env: ptyEnv });
+    ptyProcess = pty.spawn(shell, launch ? launch.args : ['-l'], { name: 'xterm-256color', cols, rows, cwd: workingDir, env: ptyEnv });
   } catch (e) {
     error(id, 'shell spawn failed', { err: e.message });
     return;
@@ -288,6 +302,7 @@ function spawnShell(session, cwd) {
   session.startedAt = Date.now();
   activeSessions.set(id, session);
   wirePtyToSession(ptyProcess, session);
+  if (launch && launch.initialInput) ptyProcess.write(launch.initialInput);
 
   // Deliver anything typed while this shell did not yet exist.
   if (session.pendingInput) {
@@ -485,7 +500,14 @@ function handleMessage(session, ws, data) {
         wsError(ws, 'SESSION_LIMIT', 'Maximum concurrent sessions reached', session.id);
         break;
       }
-      spawnShell(session, data.cwd || process.env.HOME || os.homedir());
+      try {
+        if (policy) policy.select(session, data);
+        spawnShell(session, data.cwd || process.env.HOME || os.homedir());
+      } catch (e) {
+        wsError(ws, 'LAUNCH_DENIED', e.message, session.id);
+        break;
+      }
+      if (!session.ptyProcess) { wsError(ws, 'SPAWN_FAILED', 'Could not start terminal', session.id); break; }
       if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ready', sessionId: session.id, command: resolveShell(), cwd: session.shellCwd }));
       }
@@ -495,7 +517,8 @@ function handleMessage(session, ws, data) {
       // Look up the requested session and adopt it onto this connection.
       const targetId = String(data.sessionId || '');
       const target = activeSessions.get(targetId);
-      if (target && target.ptyProcess && !target.processExited) {
+      if (target && target.ptyProcess && !target.processExited &&
+          (!policy || policy.canResume(session, target, data))) {
         resumeSession(target, ws, clampDims(data.cols, data.rows), session);
       } else {
         info(session.id, 'Resume failed — target not resumable', { targetId });
@@ -611,7 +634,7 @@ function bindWsToSession(ws, session) {
 
   ws.on('message', (message) => {
     const s = ws.__sessionRef;
-    if (!s) return;
+    if (!s || s.ws !== ws) return;
     try { handleMessage(s, ws, JSON.parse(message)); }
     catch (err) { error(s.id, 'Failed to parse WS message', { err: err.message }); wsError(ws, 'PARSE_ERROR', 'Malformed JSON message', s.id); }
   });
@@ -625,7 +648,7 @@ function bindWsToSession(ws, session) {
 
   ws.on('close', (code, reason) => {
     const s = ws.__sessionRef;
-    if (!s) return;
+    if (!s || s.ws !== ws) return;
     info(s.id, 'WebSocket disconnected', { code, reason: reason?.toString?.() || '', userClosed: !!s.userClosed });
 
     // Explicit close already cleaned up the session; ensure the placeholder is gone.
@@ -664,8 +687,13 @@ function bindWsToSession(ws, session) {
 // ─── Express app ────────────────────────────────────────────────────────────
 
 const app = express();
+if (policy) app.use((req, res, next) => {
+  try { req.terminalPrincipal = policy.authenticate(req); }
+  catch (_) { return res.status(403).json({ error: 'Use the authorized private Tailscale route.' }); }
+  next();
+});
 app.use((req, res, next) => {
-  if (!isTrustedRequest(req)) return res.status(403).json({ error: 'This address or request origin is not allowed. Use the local address or a configured authenticated HTTPS proxy.' });
+  if (!requestAllowed(req)) return res.status(403).json({ error: 'This address or request origin is not allowed. Use the local address or a configured authenticated HTTPS proxy.' });
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
   next();
@@ -679,8 +707,13 @@ app.use(express.static(path.join(__dirname, '..', 'public'), {
 app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules')));
 
 app.get('/health', (req, res) => { res.json({ status: 'ok', sessions: activeSessions.size }); });
+app.get('/session-profile', (req, res) => {
+  if (!policy) return res.json({ requireDirectory: false });
+  try { res.json(policy.profile(req)); }
+  catch (_) { res.status(400).json({ error: 'Unknown tool profile' }); }
+});
 app.get('/admin/sessions', (req, res) => {
-  const sessions = Array.from(activeSessions.values()).map((s) => {
+  const sessions = Array.from(activeSessions.values()).filter((s) => !policy || s.owner === req.terminalPrincipal).map((s) => {
     const resumable = !s.ws && !!s.ptyProcess && !s.processExited && graceTimers.has(s.id);
     return {
       id: s.id, command: s.command || resolveShell(),
@@ -692,11 +725,12 @@ app.get('/admin/sessions', (req, res) => {
     };
   });
   const resumableCount = sessions.filter((s) => s.resumable).length;
-  res.json({ active: activeSessions.size, max: MAX_CONCURRENT_SESSIONS, resumableCount, sessions });
+  res.json({ active: sessions.length, max: MAX_CONCURRENT_SESSIONS, resumableCount, sessions });
 });
 app.post('/admin/sessions/:id/kill', (req, res) => {
   const s = activeSessions.get(req.params.id);
-  if (!s) { res.status(404).json({ error: 'Session not found' }); return; }
+  if (!s || (policy && s.owner !== req.terminalPrincipal)) { res.status(404).json({ error: 'Session not found' }); return; }
+  if (policy && !policy.validOrigin(req)) { res.status(403).json({ error: 'Origin denied' }); return; }
   cleanupSession(s);
   res.json({ ok: true, id: req.params.id });
 });
@@ -704,15 +738,26 @@ app.post('/admin/sessions/:id/kill', (req, res) => {
 // ─── HTTP + WebSocket server ────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, verifyClient: ({ req }) => isTrustedRequest(req) });
+const wss = new WebSocket.Server({ server, verifyClient: (info, done) => {
+  const req = info.req;
+  if (!requestAllowed(req)) return done(false, 403, 'This address or request origin is not allowed');
+  if (!policy) return done(true);
+  try {
+    req.terminalPrincipal = policy.authenticate(req);
+    if (!policy.validOrigin(req)) throw new Error('Origin denied');
+    done(true);
+  } catch (_) { done(false, 403, 'Use the authorized private Tailscale route'); }
+} });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
   // Each connection starts as a fresh placeholder session. It becomes "real"
   // when the client sends `shell`, or it adopts an existing session via `resume`.
   const sessionId = uuidv4();
   /** @type {Session} */
   const session = {
     id: sessionId,
+    owner: req.terminalPrincipal || null,
+    toolId: null,
     command: null,
     ptyProcess: undefined,
     sessionActive: true,
@@ -748,6 +793,10 @@ async function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
-server.listen(PORT, HOST, () => {
-  info(null, `TerminalOne running at http://localhost:${PORT}`, { maxSessions: MAX_CONCURRENT_SESSIONS });
+if (SOCKET_PATH && fs.existsSync(SOCKET_PATH)) {
+  throw new Error('Socket already exists; refusing to replace an existing listener');
+}
+server.listen(SOCKET_PATH || { port: PORT, host: HOST }, () => {
+  if (SOCKET_PATH) fs.chmodSync(SOCKET_PATH, 0o600);
+  info(null, SOCKET_PATH ? 'TerminalOne listening on private Unix socket' : `TerminalOne running at http://${HOST}:${PORT}`, { maxSessions: MAX_CONCURRENT_SESSIONS });
 });
