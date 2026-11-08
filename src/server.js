@@ -395,6 +395,10 @@ function defaultVoiceConfig() {
 
 function readVoiceConfig() {
   const config = defaultVoiceConfig();
+  // Explicit deployment or test environment wins over the saved UI setting.
+  if (process.env.TERMINALONE_STT_BIN || process.env.TERMINALONE_STT_MODEL || process.env.TERMINALONE_STT_LANGUAGE) {
+    return config;
+  }
   let raw;
   try { raw = fs.readFileSync(VOICE_CONFIG_PATH, 'utf8'); }
   catch (_) { return config; }
