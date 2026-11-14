@@ -1,0 +1,127 @@
+:root { --ws-paper:#eef1f5;--ws-ink:#202832;--ws-glass:#ffffffcc;--ws-line:#cbd2dc;--ws-blue:#175cbb;--ws-muted:#526171;--ws-ease:cubic-bezier(.2,.8,.2,1); }
+body.workspace {background:var(--ws-paper);font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;color:var(--ws-ink);padding:16px 16px 16px 248px}
+.workspace .app-shell {border:1px solid var(--ws-line);border-radius:20px;overflow:hidden;background:var(--ui-bg);box-shadow:0 14px 48px #20283212;display:flex}
+.workspace .terminal-header {min-height:66px;background:var(--ws-glass);color:var(--ws-ink);border-bottom:1px solid var(--ws-line);padding:12px 22px;backdrop-filter:blur(24px);flex-wrap:nowrap}
+.workspace .terminal-title {font:600 14px -apple-system,BlinkMacSystemFont,sans-serif;color:var(--ws-ink)}
+.workspace .terminal-title::after {content:" / Shell";font-weight:400;color:var(--ws-muted)}
+.workspace .terminal-status {border:0;background:transparent;color:var(--ws-muted)}
+.workspace .terminal-status.connected {color:var(--ws-blue)}
+.workspace .status-dot.connected {background:var(--ws-blue)}
+.workspace .terminal-container {padding:20px;min-width:0}
+.workspace .terminal-footer {min-height:32px}
+.workspace .t1-chrome-fab,.workspace .t1-fab {display:none!important}
+.workspace-nav {position:fixed;inset:24px auto 24px 20px;width:208px;display:flex;flex-direction:column;gap:5px}
+.workspace-brand {display:flex;gap:12px;align-items:center;margin:7px 8px 35px;font-size:19px;font-weight:650;letter-spacing:-.6px}
+.workspace-brand small {display:block;font-size:12px;font-weight:400;color:var(--ws-muted);letter-spacing:0;margin-top:4px}
+.workspace svg {width:22px;height:22px;flex-shrink:0}
+.workspace-nav button {border:0;background:transparent;color:var(--ws-ink);display:flex;align-items:center;gap:12px;text-align:left;width:100%;min-height:46px;padding:10px 12px;border-radius:11px;font-size:13px;transition:background 200ms var(--ws-ease)}
+.workspace-nav button:hover,.workspace-nav button.selected {background:var(--ws-glass);box-shadow:0 1px 3px #20283210}
+.workspace-nav button.selected {color:var(--ws-blue)}
+.workspace-nav button span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-label {font-size:11px;color:var(--ws-muted);margin:25px 12px 8px}
+#browser-tabs {max-height:35vh;overflow:auto}
+.nav-bottom {margin-top:auto}
+.nav-bottom p {font-size:12px;line-height:1.6;color:var(--ws-muted);margin:20px 12px 0}
+.workspace button,.workspace input,.workspace select {font-family:inherit}
+.workspace button {min-height:44px;transition-duration:180ms;transition-timing-function:var(--ws-ease)}
+.workspace button:active {transform:scale(.98)}
+.workspace input,.workspace select {min-height:44px;border:1px solid var(--ws-line);border-radius:9px;padding:8px 12px;font-size:14px;background:white;color:var(--ws-ink);min-width:0}
+.workspace :focus-visible {outline:2px solid var(--ws-blue);outline-offset:3px}
+.workspace-drawer {color:var(--ws-ink);background:var(--ws-glass);backdrop-filter:blur(32px);border:1px solid var(--ws-line);border-radius:22px;padding:24px;width:400px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);margin:16px 16px 16px auto;box-shadow:0 24px 80px #20283233;animation:drawer-in 260ms var(--ws-ease)}
+.workspace-drawer::backdrop {background:#20283240;backdrop-filter:blur(3px)}
+.workspace-drawer header {display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+.workspace-drawer h2 {font-size:22px;letter-spacing:-.6px;margin:5px 0}
+.workspace-drawer small,.workspace-drawer h3 {color:var(--ws-muted);font-size:12px}
+.workspace-drawer #tool-filter {width:100%}
+.workspace-drawer button {background:white;color:var(--ws-ink);border-color:var(--ws-line)}
+.workspace-drawer #t1toolbar {display:flex!important;position:static!important;flex-wrap:wrap!important;max-height:none!important;overflow:visible!important;visibility:visible!important;transform:none!important;opacity:1!important;background:transparent!important;padding:0!important;gap:8px!important;border:0!important}
+.workspace-drawer #t1toolbar button {flex:1 1 44%;font-size:12px}
+.workspace [hidden],.workspace-drawer [hidden] {display:none!important}
+.browser-surface {display:flex;flex-direction:column;background:var(--ws-paper);color:var(--ws-ink);min-width:0;min-height:0;animation:surface-in 220ms var(--ws-ease)}
+.browser-heading {padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.browser-heading h2 {font-size:18px;margin:4px 0;max-width:32ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browser-eyebrow {font-size:11px;color:var(--ws-muted)}
+.browser-surface button {color:var(--ws-ink);background:var(--ws-glass);border:1px solid var(--ws-line);border-radius:9px}
+#browser-address {display:flex;gap:6px;margin:0 16px 12px}
+#browser-url {flex:1;width:0}
+.browser-permissions {display:flex;align-items:center;gap:8px;padding:0 16px 12px;flex-wrap:wrap;font-size:12px}
+#browser-message {font-size:12px;line-height:1.5;color:var(--ws-muted);padding:8px 16px;min-height:40px}
+.browser-canvas {flex:1;min-height:0;overflow:auto;background:white;border-block:1px solid var(--ws-line);position:relative}
+#browser-frame {width:100%;height:auto;display:block;touch-action:pan-y}
+#browser-empty {height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px}
+#browser-empty svg {width:40px;height:40px;color:var(--ws-muted)}
+#browser-empty h3 {font-size:22px;letter-spacing:-.6px;margin-bottom:0}
+#browser-empty p {font-size:14px;line-height:1.7;color:var(--ws-muted)}
+#browser-type {display:flex;gap:8px;padding:12px 16px}
+#browser-type input {flex:1;width:0}
+@keyframes drawer-in {from {opacity:0;transform:translateX(20px)} to {opacity:1;transform:none}}
+@keyframes surface-in {from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:none}}
+@media(min-width:1100px) {
+ .workspace.browser-open .app-shell {display:grid;grid-template-columns:minmax(320px,1fr) minmax(480px,1.15fr);grid-template-rows:66px 1fr 32px}
+ .workspace.browser-open .terminal-header {grid-column:1;grid-row:1}
+ .workspace.browser-open .terminal-container {grid-column:1;grid-row:2}
+ .workspace.browser-open .terminal-footer {grid-column:1;grid-row:3}
+ .workspace.browser-open .browser-surface {grid-column:2;grid-row:1/4;border-left:1px solid var(--ws-line)}
+ .workspace.browser-open .keybar,.workspace.browser-open .t1session-tabs {display:none}
+}
+@media(min-width:700px) and (max-width:1099px) {
+ body.workspace {padding:12px 12px 12px 80px}
+ .workspace-nav {width:56px;left:12px}
+ .workspace-nav button {justify-content:center;padding:10px}
+ .workspace-nav button span,.workspace-label,.nav-bottom p,.workspace-brand span {display:none}
+ .workspace-brand {margin:10px 16px 26px}
+ .workspace.browser-open .terminal-container {flex:1}
+ .workspace.browser-open .browser-surface {height:57%;flex-shrink:0;border-top:1px solid var(--ws-line)}
+ .workspace.browser-open .terminal-footer {display:none}
+}
+@media(max-width:699px) {
+ body.workspace {padding:8px 8px calc(78px + env(safe-area-inset-bottom))}
+ .workspace .app-shell {border-radius:16px}
+ .workspace-nav {inset:auto 8px env(safe-area-inset-bottom) 8px;width:auto;height:70px;flex-direction:row;justify-content:space-around;gap:0;align-items:center;background:var(--ws-glass);backdrop-filter:blur(24px);border-radius:18px}
+ .workspace-nav>button,.workspace-nav .nav-bottom {flex:1}
+ .workspace-nav button {justify-content:center;flex-direction:column;gap:3px;padding:6px;font-size:10px;min-height:56px}
+ .workspace-brand,.workspace-label,.nav-bottom p {display:none}
+ .nav-bottom {margin:0}
+ #browser-tabs {position:fixed;left:12px;right:12px;bottom:76px;display:none;background:var(--ws-paper);border-radius:12px;max-height:160px}
+ .workspace.browser-open #browser-tabs {display:flex;overflow:auto}
+ #browser-tabs button {min-width:90px;max-width:130px}
+ .workspace.browser-open .app-shell {margin-bottom:62px;height:calc(100% - 62px)}
+ .workspace.browser-open .terminal-container,.workspace.browser-open .terminal-header,.workspace.browser-open .terminal-footer,.workspace.browser-open .keybar,.workspace.browser-open .t1session-tabs {display:none!important}
+ .workspace .terminal-header {padding:10px 12px;min-height:58px}
+ .workspace .terminal-title {font-size:12px}
+ .workspace .terminal-container {padding:10px}
+ .browser-surface {height:100%}
+ .browser-heading {padding:12px}
+ .browser-heading h2 {max-width:18ch;font-size:16px}
+ #browser-address {margin:0 10px 8px;gap:4px;flex-wrap:wrap}
+ #browser-url {order:-1;flex-basis:100%;width:100%}
+ .browser-permissions {padding:0 10px 8px;gap:5px}
+ .browser-permissions label {width:100%}
+ .browser-permissions button,.browser-permissions select {font-size:11px;padding:4px 7px}
+ #browser-message {padding:4px 10px;font-size:11px}
+ #browser-type {padding:8px;gap:4px}
+ #browser-type button {font-size:11px;padding:4px 8px}
+ .workspace-drawer {margin:auto 8px 8px;width:calc(100% - 16px);max-height:85dvh;border-radius:22px 22px 14px 14px}
+}
+@media(prefers-reduced-motion:reduce) {
+ .workspace *,.workspace *::before,.workspace *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+
+/* Native controls preserve keyboard and assistive-technology semantics. */
+.workspace input,.workspace select,.workspace textarea {color-scheme:light;accent-color:var(--ws-blue)}
+.workspace-drawer {scrollbar-width:auto;scrollbar-color:var(--ws-muted) var(--ws-paper)}
+.workspace-drawer textarea {width:100%;min-height:120px;resize:vertical}
+.browser-reading {white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6;margin-top:20px}
+@supports (transition-behavior:allow-discrete) {
+ .workspace-drawer {animation:none;opacity:0;transform:translateX(20px);transition:opacity 260ms var(--ws-ease),transform 260ms var(--ws-ease),display 260ms allow-discrete,overlay 260ms allow-discrete}
+ .workspace-drawer[open] {opacity:1;transform:none}
+ @starting-style { .workspace-drawer[open] {opacity:0;transform:translateX(20px)} }
+}
+@media(prefers-reduced-motion:reduce) {
+ .workspace .workspace-drawer {animation:none!important;transition:none!important;transform:none!important}
+}
+/* Keep terminal controls to one deliberate row beside a browser on tablets. */
+@media(min-width:700px) and (max-width:1099px) {
+ .workspace.browser-open .keybar {flex-wrap:nowrap;overflow-x:auto}
+ .workspace.browser-open .keybar .kb-arrows {display:none}
+}

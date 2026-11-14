@@ -816,6 +816,8 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: '64kb' }));
+const closeBrowsers = require('./browser-workspace').installBrowserWorkspace(app);
+
 // App assets are served with no-store so the browser always runs the latest
 // frontend (critical during input/dictation iteration — a cached input-guard.mjs
 // silently reproduces already-fixed echo bugs).
@@ -895,6 +897,7 @@ wss.on('connection', (ws) => {
 async function shutdown(signal) {
   info(null, `Received ${signal}, starting graceful shutdown`, { activeSessions: activeSessions.size });
   server.close();
+  await closeBrowsers().catch(err => error(null, 'Browser shutdown failed', {err:err.message}));
   const promises = Array.from(activeSessions.values()).map((s) => {
     clearGraceTimer(s);
     if (s.ptyProcess) killPty(s.ptyProcess, s.id);

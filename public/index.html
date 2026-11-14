@@ -406,6 +406,7 @@
   *, *::before, *::after { animation: none !important; transition: none !important; }
  }
  </style>
+ <link rel="stylesheet" href="/workspace.css">
 </head>
 <body data-style="default" data-theme="tokyo-night" data-device="desktop">
  <canvas id="fxCanvas" aria-hidden="true"></canvas>
@@ -1398,6 +1399,8 @@
       }
     }
     window.__t1Features = loaded;
+    const workspace = await import('./workspace.mjs');
+    workspace.init(T1);
   })();
 
   connect();
