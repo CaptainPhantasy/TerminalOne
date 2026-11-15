@@ -6,16 +6,16 @@
 
 A local browser terminal with a real PTY, session resume, themes, keyboard tools, and a responsive interface. Built at Floyd’s Labs: one garage, two black cats, and tools that have to earn the desk space.
 
-[Download v1.0.2](https://github.com/CaptainPhantasy/TerminalOne/releases/tag/v1.0.2) · [Report a bug](https://github.com/CaptainPhantasy/TerminalOne/issues) · [Floyd’s Labs](https://floydslabs.com)
+[Download v1.1.0](https://github.com/CaptainPhantasy/TerminalOne/releases/tag/v1.1.0) · [Report a bug](https://github.com/CaptainPhantasy/TerminalOne/issues) · [Floyd’s Labs](https://floydslabs.com)
 
 ## Get it running
 
 Requirements: **Node.js 22.x and npm; macOS or Linux**.
 
-Download `terminalone-1.0.2.tgz`, unpack it, and install dependencies:
+Download `terminalone-1.1.0.tgz`, unpack it, and install dependencies:
 
 ```sh
-mkdir terminalone && tar -xzf terminalone-1.0.2.tgz -C terminalone
+mkdir terminalone && tar -xzf terminalone-1.1.0.tgz -C terminalone
 cd terminalone/package
 npm ci --omit=dev
 npm run doctor
@@ -38,6 +38,10 @@ Session resume keeps detached shells for up to five minutes. Browser settings pe
 
 For herdr on iPhone or iPad, tap **Ctrl+b** in the bottom key bar to send Control plus lowercase b immediately. You can also open **Snippets** and tap **Ctrl+b** there. No keyboard switch or Enter press is needed.
 
+### Private deployment on Linux
+
+For a service behind a Unix socket or an authenticated policy module, see [LINUX.md](LINUX.md). The default remains a loopback TCP listener. A non-loopback address is refused unless a policy module supplies authentication.
+
 ### Open it like a desktop app (macOS)
 
 From a source checkout on macOS, run `bash scripts/install-service.sh` to install the `t1` launcher and TerminalOne.app. The launcher opens the UI only after health is confirmed, then falls back to direct local startup if launchd is unavailable. Startup diagnostics go to `~/Library/Logs/TerminalOne/local-launch.err.log`.
@@ -50,11 +54,11 @@ On short touch screens, **Tools** opens the secondary controls without taking ov
 
 ## What is in the box
 
-The release includes `terminalone-1.0.2.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.
+The release includes `terminalone-1.1.0.tgz`, source where applicable, and `SHA256SUMS.txt`. Use the tagged release's named assets for installation; GitHub's automatic source archives are snapshots. Verify a download with `shasum -a 256 -c SHA256SUMS.txt` after downloading the matching files.
 
 ## Show the work
 
-`npm ci` installs development dependencies. `npm test` covers request boundaries, input handling, browser smoke behavior, resume/mobile features, voice transport, and responsive layouts. A fresh release install is separately started and checked through HTTP and WebSocket. External STT and remote access are not verified integrations.
+`npm ci` installs development dependencies. `npm test` covers request boundaries, input handling, browser smoke behavior, resume/mobile features, voice transport, responsive layouts, and the Unix-socket/policy deployment path (`npm run test:linux`). A fresh release install is separately started and checked through HTTP and WebSocket. External STT and remote access are not verified integrations.
 
 ## Contribute or get help
 
