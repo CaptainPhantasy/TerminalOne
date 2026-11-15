@@ -2,6 +2,15 @@
 
 All notable changes to TerminalOne.
 
+## [1.1.0] — 2026-11-15
+
+- Added an optional Unix-socket listener (`TERMINALONE_SOCKET`). The socket is created with mode `0600`, a graceful shutdown removes it, and startup refuses to replace an existing listener.
+- Added an optional policy module (`TERMINALONE_POLICY_MODULE`) for authenticated private deployments. It can authenticate HTTP and WebSocket connections, supply a session profile, control PTY launch, and restrict session resume.
+- Added a `HOST` override for the TCP listener. The default remains `127.0.0.1`; a non-loopback address is refused unless a policy module is configured.
+- Added session ownership filtering to `/admin/sessions` and a `/session-profile` endpoint.
+- Hardened WebSocket session binding so a stale socket cannot act on another connection's session.
+- Added `tests/linux-deployment.test.js` and `npm run test:linux`.
+
 ## [1.0.3] — 2026-11-08
 
 - Added a Voice / speech-to-text settings section. The STT command, model, language, and argument template are saved server-side in `~/.config/terminalone/voice.json` and used at transcription time.
